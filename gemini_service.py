@@ -1,9 +1,10 @@
 import requests
 import json
+import os
 
-GATEWAY_URL = "https://imllm.intermesh.net/v1/chat/completions"
-ACCESS_KEY = "sk-tjw8L1Ya0ERxH55JuSQQQQ"
-DEFAULT_MODEL = "google/gemini-2.5-pro"
+GATEWAY_URL = os.environ.get("GEMINI_GATEWAY_URL", "https://imllm.intermesh.net/v1/chat/completions")
+ACCESS_KEY = os.environ.get("GEMINI_API_KEY", "sk-tjw8L1Ya0ERxH55JuSQQQQ")
+DEFAULT_MODEL = os.environ.get("GEMINI_MODEL", "google/gemini-2.5-pro")
 
 def call_gateway(system_instruction, user_prompt, is_json=False):
     messages = [

@@ -8,8 +8,8 @@ from datetime import datetime
 import psycopg2
 import gemini_service
 
-app = Flask(__name__, static_folder='static')
-CORS(app)
+app = Flask(__name__, static_folder='dist')
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
 
 DB_PATH = 'proxylysis_history.db'
 
@@ -224,9 +224,30 @@ def get_mcat():
     try:
         data = request.json
         gl_id = data.get('glId')
-        return jsonify({"mcat_data": ["Test Category 1", "Test Category 2"]}) # Placeholder
+        if not gl_id:
+            return jsonify({"error": "glId is required"}), 400
+            
+        print(f"[*] Fetching MCAT from Redshift for {gl_id}")
+        conn = psycopg2.connect(**REDSHIFT_CONFIG)
+        cur = conn.cursor()
+        query = """
+        SELECT DISTINCT D.glcat_cat_name
+        FROM im_dwh_rpt.dim_glcat_grp_to_cat A
+        JOIN im_dwh_rpt.dim_glcat_cat_to_mcat B ON A.fk_glcat_cat_id = B.fk_glcat_cat_id
+        JOIN im_dwh_rpt.fact_pc_item_to_glcat_mcat C ON B.fk_glcat_mcat_id = C.fk_glcat_mcat_id
+        JOIN im_dwh_rpt.dim_glcat_cat D ON A.fk_glcat_cat_id = D.glcat_cat_id
+        WHERE A.isprimegrp = -1 AND B.isprime = -1 AND C.item_mapping_isprime = -1
+        AND C.fk_glusr_usr_id = %s
+        """
+        cur.execute(query, (gl_id,))
+        rows = cur.fetchall()
+        mcat_list = [row[0] for row in rows]
+        cur.close()
+        conn.close()
+        return jsonify({"glId": gl_id, "mcat_data": mcat_list})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print(f"[!] MCAT Error: {str(e)}")
+        return jsonify({"mcat_data": [], "error": str(e)}), 500
 
 # --- GEMINI AI ROUTES ---
 @app.route('/ai/analyze_activity', methods=['POST'])
@@ -259,6 +280,27 @@ def ai_scan():
         data = request.json
         result = gemini_service.scan_documents_with_gemini(data.get('files'))
         return jsonify(result)
+    except Exception as e: return jsonify({"error": str(e)}), 500
+
+@app.route('/ai/match_records', methods=['POST'])
+def ai_matchmaking():
+    try:
+        data = request.json
+        result = gemini_service.analyze_matchmaking_data(data.get('rawMatchJson'))
+        return jsonify({"contacts": result})
+    except Exception as e: return jsonify({"error": str(e)}), 500
+
+@app.route('/ai/online_presence', methods=['POST'])
+def ai_presence():
+    try:
+        data = request.json
+        result = gemini_service.search_online_presence(
+            data.get('companyName'), 
+            data.get('address'), 
+            data.get('gst'), 
+            data.get('contact')
+        )
+        return jsonify({"presence": result})
     except Exception as e: return jsonify({"error": str(e)}), 500
 
 def text_response(text):
@@ -349,5 +391,5 @@ def serve_static(path):
     return send_from_directory(app.static_folder, 'index.html')
 
 if __name__ == '__main__':
-    print("--- UNIFIED DESKTOP BACKEND ACTIVE (PORT 5000) ---")
-    app.run(host='0.0.0.0', port=5000)
+    print("--- UNIFIED DESKTOP BACKEND ACTIVE (PORT 3000) ---")
+    app.run(host='0.0.0.0', port=3000)

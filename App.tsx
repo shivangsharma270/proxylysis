@@ -158,7 +158,7 @@ import { Coins } from 'lucide-react';
           additional_comments: additionalComments
         };
 
-        const res = await fetch(`${BRIDGE_HOST}:5009/save_session`, {
+        const res = await fetch(`/save_session`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -181,7 +181,7 @@ import { Coins } from 'lucide-react';
     const fetchHistory = async () => {
       setIsHistoryLoading(true);
       try {
-        const res = await fetch(`${BRIDGE_HOST}:5009/list_sessions`);
+        const res = await fetch(`/list_sessions`);
         if (res.ok) {
           const data = await res.json();
           setHistorySessions(data);
@@ -196,7 +196,7 @@ import { Coins } from 'lucide-react';
     const loadSession = async (sessionId: string) => {
       setIsHistoryLoading(true);
       try {
-        const res = await fetch(`${BRIDGE_HOST}:5009/get_session/${sessionId}`);
+        const res = await fetch(`/get_session/${sessionId}`);
         if (res.ok) {
           const session = await res.json();
           
@@ -231,7 +231,7 @@ import { Coins } from 'lucide-react';
     const deleteSession = async (sessionId: string) => {
       if (!confirm("Are you sure you want to delete this session?")) return;
       try {
-        const res = await fetch(`${BRIDGE_HOST}:5009/delete_session/${sessionId}`, {
+        const res = await fetch(`/delete_session/${sessionId}`, {
           method: 'DELETE'
         });
         if (res.ok) {
@@ -352,7 +352,9 @@ import { Coins } from 'lucide-react';
     const matchColumnSelectorRef = useRef<HTMLDivElement>(null);
     const [isMatchColumnSelectorOpen, setIsMatchColumnSelectorOpen] = useState(false);
 
-    const BRIDGE_HOST = 'http://127.0.0.1';
+    const BRIDGE_HOST = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+      ? window.location.origin 
+      : 'http://localhost:3000';
 
     // 47 Parameters for CSL
     const cslParameters = [
@@ -501,12 +503,12 @@ import { Coins } from 'lucide-react';
         let historyOk = false;
 
         try {
-          const historyRes = await fetch(`${BRIDGE_HOST}:5009/list_sessions`);
+          const historyRes = await fetch(`${BRIDGE_HOST}/list_sessions`);
           historyOk = historyRes.ok;
         } catch {}
 
         try {
-          const cslRes = await fetch(`${BRIDGE_HOST}:5000/fetch`, { 
+          const cslRes = await fetch(`${BRIDGE_HOST}/fetch`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -515,7 +517,7 @@ import { Coins } from 'lucide-react';
         } catch {}
 
         try {
-          const matchRes = await fetch(`${BRIDGE_HOST}:5001/search`, { 
+          const matchRes = await fetch(`${BRIDGE_HOST}/search`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -524,7 +526,7 @@ import { Coins } from 'lucide-react';
         } catch {}
 
         try {
-          const servicesRes = await fetch(`${BRIDGE_HOST}:5002/services`, { 
+          const servicesRes = await fetch(`${BRIDGE_HOST}/services`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -533,7 +535,7 @@ import { Coins } from 'lucide-react';
         } catch {}
 
         try {
-          const categoryRes = await fetch(`${BRIDGE_HOST}:5003/category`, { 
+          const categoryRes = await fetch(`${BRIDGE_HOST}/category`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -542,7 +544,7 @@ import { Coins } from 'lucide-react';
         } catch {}
 
         try {
-          const complaintsRes = await fetch(`${BRIDGE_HOST}:5004/complaints`, { 
+          const complaintsRes = await fetch(`${BRIDGE_HOST}/complaints`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -551,7 +553,7 @@ import { Coins } from 'lucide-react';
         } catch {}
 
         try {
-          const ratingsRes = await fetch(`${BRIDGE_HOST}:5005/rating`, { 
+          const ratingsRes = await fetch(`${BRIDGE_HOST}/rating`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -560,7 +562,7 @@ import { Coins } from 'lucide-react';
         } catch {}
 
         try {
-          const fraudRes = await fetch(`${BRIDGE_HOST}:5006/fraud`, { 
+          const fraudRes = await fetch(`${BRIDGE_HOST}/fraud`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -569,7 +571,7 @@ import { Coins } from 'lucide-react';
         } catch {}
 
         try {
-          const overviewRes = await fetch(`${BRIDGE_HOST}:5007/overview`, { 
+          const overviewRes = await fetch(`${BRIDGE_HOST}/overview`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -578,7 +580,7 @@ import { Coins } from 'lucide-react';
         } catch {}
 
         try {
-          const summaryRes = await fetch(`${BRIDGE_HOST}:5008/summary`, { 
+          const summaryRes = await fetch(`${BRIDGE_HOST}/summary`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -631,22 +633,22 @@ import { Coins } from 'lucide-react';
             if (!sessionOverviews[glid]) {
               try {
                 const [merpRes, rsRes, sumRes, mcatRes] = await Promise.all([
-                  fetch(`${BRIDGE_HOST}:5007/overview`, {
+                  fetch(`/overview`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ glid, AK: settings.authToken })
                   }),
-                  fetch(`${BRIDGE_HOST}:5004/redshift_overview`, {
+                  fetch(`/redshift_overview`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ glId: glid })
                   }),
-                  fetch(`${BRIDGE_HOST}:5008/summary`, {
+                  fetch(`/summary`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ glid })
                   }),
-                  fetch(`${BRIDGE_HOST}:5010/mcat`, {
+                  fetch(`/mcat`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ glId: glid })
@@ -883,7 +885,7 @@ import { Coins } from 'lucide-react';
       });
 
       // 4. Fetch LatLong Status
-      fetch(`${BRIDGE_HOST}:5004/bs_complaints`, {
+      fetch(`/bs_complaints`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ glId: glid })
@@ -988,7 +990,7 @@ import { Coins } from 'lucide-react';
             let mcatCategories = sessionOverviews[glId]?.mcat;
             
             if (!mcatCategories) {
-              const mcatRes = await fetch(`${BRIDGE_HOST}:5010/mcat`, {
+              const mcatRes = await fetch(`${BRIDGE_HOST}/mcat`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ glId })
@@ -1051,7 +1053,7 @@ import { Coins } from 'lucide-react';
 
           // Fetch Active Services (5002)
           try {
-            const srvRes = await fetch(`${BRIDGE_HOST}:5002/services`, {
+            const srvRes = await fetch(`${BRIDGE_HOST}/services`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ glid: item.glId, AK: settings.authToken })
@@ -1172,7 +1174,7 @@ import { Coins } from 'lucide-react';
       setRawFraudResponse(null);
       
       try {
-        const fraudRes = await fetch(`${BRIDGE_HOST}:5006/fraud`, {
+        const fraudRes = await fetch(`${BRIDGE_HOST}/fraud`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1212,7 +1214,7 @@ import { Coins } from 'lucide-react';
       
       console.log(`[*] CSL Next Request: startTime=${cslPagination.nextStartTime}, endTime=${cslPagination.nextEndTime}`);
       try {
-        const cslResponse = await fetch(`${BRIDGE_HOST}:5000/fetch`, {
+        const cslResponse = await fetch(`/fetch`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1354,7 +1356,7 @@ import { Coins } from 'lucide-react';
       try {
         // 1. Fetch CSL (First Batch)
         try {
-          const cslResponse = await fetch(`${BRIDGE_HOST}:5000/fetch`, {
+          const cslResponse = await fetch(`${BRIDGE_HOST}/fetch`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1400,7 +1402,7 @@ import { Coins } from 'lucide-react';
 
         // 2. Fetch Matchmaking
         try {
-          const matchResponse = await fetch(`${BRIDGE_HOST}:5001/search`, {
+          const matchResponse = await fetch(`${BRIDGE_HOST}/search`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1468,7 +1470,7 @@ import { Coins } from 'lucide-react';
 
           // Fetch Active Services (5002)
           try {
-            const srvRes = await fetch(`${BRIDGE_HOST}:5002/services`, {
+            const srvRes = await fetch(`${BRIDGE_HOST}/services`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ glid: item.glId, AK: settings.authToken })
@@ -1596,16 +1598,16 @@ import { Coins } from 'lucide-react';
                   <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-4 pb-2 border-b border-slate-100">Service Connectivity</h3>
                   <div className="grid grid-cols-1 gap-3">
                     {[
-                      { id: 'CSL', port: 5000, status: backendStatus.csl, color: 'bg-blue-500' },
-                      { id: 'LMS', port: 5001, status: backendStatus.match, color: 'bg-indigo-500' },
-                      { id: 'MERP', port: 5002, status: backendStatus.services, color: 'bg-violet-500' },
-                      { id: 'CAT', port: 5003, status: backendStatus.category, color: 'bg-purple-500' },
-                      { id: 'REDSHIFT', port: 5004, status: backendStatus.complaints, color: 'bg-rose-500' },
-                      { id: 'RATINGS', port: 5005, status: backendStatus.ratings, color: 'bg-amber-500' },
-                      { id: 'FRAUD', port: 5006, status: backendStatus.fraud, color: 'bg-pink-500' },
-                      { id: 'OVERVIEW', port: 5007, status: backendStatus.overview, color: 'bg-cyan-500' },
-                      { id: 'SUMMARY', port: 5008, status: backendStatus.summary, color: 'bg-teal-500' },
-                      { id: 'HISTORY', port: 5009, status: backendStatus.history, color: 'bg-slate-500' },
+                      { id: 'CSL', status: backendStatus.csl, color: 'bg-blue-500' },
+                      { id: 'LMS', status: backendStatus.match, color: 'bg-indigo-500' },
+                      { id: 'MERP', status: backendStatus.services, color: 'bg-violet-500' },
+                      { id: 'CAT', status: backendStatus.category, color: 'bg-purple-500' },
+                      { id: 'REDSHIFT', status: backendStatus.complaints, color: 'bg-rose-500' },
+                      { id: 'RATINGS', status: backendStatus.ratings, color: 'bg-amber-500' },
+                      { id: 'FRAUD', status: backendStatus.fraud, color: 'bg-pink-500' },
+                      { id: 'OVERVIEW', status: backendStatus.overview, color: 'bg-cyan-500' },
+                      { id: 'SUMMARY', status: backendStatus.summary, color: 'bg-teal-500' },
+                      { id: 'HISTORY', status: backendStatus.history, color: 'bg-slate-500' },
                     ].map((svc) => (
                       <div key={svc.id} className="flex items-center justify-between group/item">
                         <div className="flex items-center gap-3">
