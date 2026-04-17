@@ -3,7 +3,7 @@
   import { Bold, Italic, Underline, List, ListOrdered, Image as ImageIcon, Trash2, Type, Link as LinkIcon, Eraser, ArrowUpDown } from 'lucide-react';
   import { motion, AnimatePresence } from 'framer-motion';
   import { AgentSettings } from './types.ts';
-  import { identifyInvolvedGLIDs, analyzeProductMismatch, searchOnlinePresence, scanDocumentsWithGemini, detectMismatchWithGemini } from './services/geminiService.ts';
+  import { identifyInvolvedGLIDs, analyzeProductMismatch, searchOnlinePresence, scanDocumentsWithGemini } from './services/geminiService.ts';
 import TokenAnalysis from './components/TokenAnalysis.tsx';
 import { Coins } from 'lucide-react';
 
@@ -50,9 +50,12 @@ import { Coins } from 'lucide-react';
     const [isLatlongLoading, setIsLatlongLoading] = useState(false);
     const [isOverviewPaneOpen, setIsOverviewPaneOpen] = useState(false);
 
+    // Mismatch Analysis State
+    const [mismatchAnalysisStatus, setMismatchAnalysisStatus] = useState<Record<string, 'pending' | 'processing' | 'Mismatch Found' | 'No Mismatch'>>({});
+    const [isMismatchAnalyzing, setIsMismatchAnalyzing] = useState(false);
+
     // AI Involved GLIDs state
     const [involvedGLIDs, setInvolvedGLIDs] = useState<any[] | null>(null);
-    const [mismatchAnalysis, setMismatchAnalysis] = useState<Record<string, { status: 'pending' | 'analyzing' | 'completed', result?: string }>>({});
     const [isAnalyzingGLIDs, setIsAnalyzingGLIDs] = useState(false);
     const [analysisProgress, setAnalysisProgress] = useState(0);
     const [suspectSortBy, setSuspectSortBy] = useState<'ratings' | 'paidSince' | null>(null);
@@ -155,7 +158,7 @@ import { Coins } from 'lucide-react';
           additional_comments: additionalComments
         };
 
-        const res = await fetch(`${BRIDGE_HOST}/5009/save_session`, {
+        const res = await fetch(`${BRIDGE_HOST}:5009/save_session`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -178,7 +181,7 @@ import { Coins } from 'lucide-react';
     const fetchHistory = async () => {
       setIsHistoryLoading(true);
       try {
-        const res = await fetch(`${BRIDGE_HOST}/5009/list_sessions`);
+        const res = await fetch(`${BRIDGE_HOST}:5009/list_sessions`);
         if (res.ok) {
           const data = await res.json();
           setHistorySessions(data);
@@ -193,7 +196,7 @@ import { Coins } from 'lucide-react';
     const loadSession = async (sessionId: string) => {
       setIsHistoryLoading(true);
       try {
-        const res = await fetch(`${BRIDGE_HOST}/5009/get_session/${sessionId}`);
+        const res = await fetch(`${BRIDGE_HOST}:5009/get_session/${sessionId}`);
         if (res.ok) {
           const session = await res.json();
           
@@ -228,7 +231,7 @@ import { Coins } from 'lucide-react';
     const deleteSession = async (sessionId: string) => {
       if (!confirm("Are you sure you want to delete this session?")) return;
       try {
-        const res = await fetch(`${BRIDGE_HOST}/5009/delete_session/${sessionId}`, {
+        const res = await fetch(`${BRIDGE_HOST}:5009/delete_session/${sessionId}`, {
           method: 'DELETE'
         });
         if (res.ok) {
@@ -308,7 +311,7 @@ import { Coins } from 'lucide-react';
             const overviews: any[] = [];
             for (const glId of selectedSuspectGLIDs) {
               try {
-                const res = await fetch(`${BRIDGE_HOST}/5007/overview`, {
+                const res = await fetch(`${BRIDGE_HOST}:5007/overview`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ glId, AK: settings.authToken })
@@ -349,7 +352,7 @@ import { Coins } from 'lucide-react';
     const matchColumnSelectorRef = useRef<HTMLDivElement>(null);
     const [isMatchColumnSelectorOpen, setIsMatchColumnSelectorOpen] = useState(false);
 
-    const BRIDGE_HOST = '/api';
+    const BRIDGE_HOST = 'http://127.0.0.1';
 
     // 47 Parameters for CSL
     const cslParameters = [
@@ -498,12 +501,12 @@ import { Coins } from 'lucide-react';
         let historyOk = false;
 
         try {
-          const historyRes = await fetch(`${BRIDGE_HOST}/5009/list_sessions`);
+          const historyRes = await fetch(`${BRIDGE_HOST}:5009/list_sessions`);
           historyOk = historyRes.ok;
         } catch {}
 
         try {
-          const cslRes = await fetch(`${BRIDGE_HOST}/5000/fetch`, { 
+          const cslRes = await fetch(`${BRIDGE_HOST}:5000/fetch`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -512,7 +515,7 @@ import { Coins } from 'lucide-react';
         } catch {}
 
         try {
-          const matchRes = await fetch(`${BRIDGE_HOST}/5001/search`, { 
+          const matchRes = await fetch(`${BRIDGE_HOST}:5001/search`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -521,7 +524,7 @@ import { Coins } from 'lucide-react';
         } catch {}
 
         try {
-          const servicesRes = await fetch(`${BRIDGE_HOST}/5002/services`, { 
+          const servicesRes = await fetch(`${BRIDGE_HOST}:5002/services`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -530,7 +533,7 @@ import { Coins } from 'lucide-react';
         } catch {}
 
         try {
-          const categoryRes = await fetch(`${BRIDGE_HOST}/5003/category`, { 
+          const categoryRes = await fetch(`${BRIDGE_HOST}:5003/category`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -539,7 +542,7 @@ import { Coins } from 'lucide-react';
         } catch {}
 
         try {
-          const complaintsRes = await fetch(`${BRIDGE_HOST}/5004/complaints`, { 
+          const complaintsRes = await fetch(`${BRIDGE_HOST}:5004/complaints`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -548,7 +551,7 @@ import { Coins } from 'lucide-react';
         } catch {}
 
         try {
-          const ratingsRes = await fetch(`${BRIDGE_HOST}/5005/rating`, { 
+          const ratingsRes = await fetch(`${BRIDGE_HOST}:5005/rating`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -557,7 +560,7 @@ import { Coins } from 'lucide-react';
         } catch {}
 
         try {
-          const fraudRes = await fetch(`${BRIDGE_HOST}/5006/fraud`, { 
+          const fraudRes = await fetch(`${BRIDGE_HOST}:5006/fraud`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -566,7 +569,7 @@ import { Coins } from 'lucide-react';
         } catch {}
 
         try {
-          const overviewRes = await fetch(`${BRIDGE_HOST}/5007/overview`, { 
+          const overviewRes = await fetch(`${BRIDGE_HOST}:5007/overview`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -575,7 +578,7 @@ import { Coins } from 'lucide-react';
         } catch {}
 
         try {
-          const summaryRes = await fetch(`${BRIDGE_HOST}/5008/summary`, { 
+          const summaryRes = await fetch(`${BRIDGE_HOST}:5008/summary`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -600,7 +603,7 @@ import { Coins } from 'lucide-react';
       checkHealth();
       
       // Initialize History Database
-      fetch(`${BRIDGE_HOST}/5009/init_db`).catch(e => console.error("DB Init Error:", e));
+      fetch(`${BRIDGE_HOST}:5009/init_db`).catch(e => console.error("DB Init Error:", e));
 
       const interval = setInterval(checkHealth, 5000);
 
@@ -628,22 +631,22 @@ import { Coins } from 'lucide-react';
             if (!sessionOverviews[glid]) {
               try {
                 const [merpRes, rsRes, sumRes, mcatRes] = await Promise.all([
-                  fetch(`${BRIDGE_HOST}/5007/overview`, {
+                  fetch(`${BRIDGE_HOST}:5007/overview`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ glid, AK: settings.authToken })
                   }),
-                  fetch(`${BRIDGE_HOST}/5004/redshift_overview`, {
+                  fetch(`${BRIDGE_HOST}:5004/redshift_overview`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ glId: glid })
                   }),
-                  fetch(`${BRIDGE_HOST}/5008/summary`, {
+                  fetch(`${BRIDGE_HOST}:5008/summary`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ glid })
                   }),
-                  fetch(`${BRIDGE_HOST}/5010/mcat`, {
+                  fetch(`${BRIDGE_HOST}:5010/mcat`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ glId: glid })
@@ -753,7 +756,7 @@ import { Coins } from 'lucide-react';
       setAddressStatusData(null);
 
       // 1. Fetch MERP Overview
-      fetch(`${BRIDGE_HOST}/5007/overview`, {
+      fetch(`${BRIDGE_HOST}:5007/overview`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ glid, AK: settings.authToken })
@@ -798,7 +801,7 @@ import { Coins } from 'lucide-react';
       });
 
       // 2. Fetch Redshift Overview Metrics
-      fetch(`${BRIDGE_HOST}/5004/redshift_overview`, {
+      fetch(`${BRIDGE_HOST}:5004/redshift_overview`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ glId: glid })
@@ -828,7 +831,7 @@ import { Coins } from 'lucide-react';
       });
 
       // 3. Fetch Top Bar Summary
-      fetch(`${BRIDGE_HOST}/5008/summary`, {
+      fetch(`${BRIDGE_HOST}:5008/summary`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ glid })
@@ -854,7 +857,7 @@ import { Coins } from 'lucide-react';
       });
 
       // 3.5 Fetch MCAT Data
-      fetch(`${BRIDGE_HOST}/5010/mcat`, {
+      fetch(`${BRIDGE_HOST}:5010/mcat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ glId: glid })
@@ -880,7 +883,7 @@ import { Coins } from 'lucide-react';
       });
 
       // 4. Fetch LatLong Status
-      fetch(`${BRIDGE_HOST}/5004/bs_complaints`, {
+      fetch(`${BRIDGE_HOST}:5004/bs_complaints`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ glId: glid })
@@ -962,13 +965,70 @@ import { Coins } from 'lucide-react';
       }
     };
 
+    const runMismatchAnalysis = async (glIds: string[]) => {
+      if (isMismatchAnalyzing) return;
+      setIsMismatchAnalyzing(true);
+
+      const batchSize = 3;
+      const idsToAnalyze = [...glIds];
+
+      for (let i = 0; i < idsToAnalyze.length; i += batchSize) {
+        const batch = idsToAnalyze.slice(i, i + batchSize);
+        
+        // Mark batch as processing
+        setMismatchAnalysisStatus(prev => {
+          const next = { ...prev };
+          batch.forEach(id => { next[id] = 'processing'; });
+          return next;
+        });
+
+        await Promise.all(batch.map(async (glId) => {
+          try {
+            // Ensure we have MCAT data. If not, fetch it first.
+            let mcatCategories = sessionOverviews[glId]?.mcat;
+            
+            if (!mcatCategories) {
+              const mcatRes = await fetch(`${BRIDGE_HOST}:5010/mcat`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ glId })
+              });
+              if (mcatRes.ok) {
+                const d = await mcatRes.json();
+                mcatCategories = d.mcat_data || [];
+                // Update cache
+                setSessionOverviews(prev => ({
+                  ...prev,
+                  [glId]: { ...prev[glId], mcat: mcatCategories }
+                }));
+              }
+            }
+
+            if (!mcatCategories || mcatCategories.length === 0) {
+              setMismatchAnalysisStatus(prev => ({ ...prev, [glId]: 'Mismatch Found' }));
+              return;
+            }
+
+            const result = await analyzeProductMismatch(settings.productName, mcatCategories);
+            setMismatchAnalysisStatus(prev => ({ 
+              ...prev, 
+              [glId]: result === 'Mismatch' ? 'Mismatch Found' : 'No Mismatch' 
+            }));
+          } catch (error) {
+            console.error(`Mismatch analysis failed for ${glId}:`, error);
+            setMismatchAnalysisStatus(prev => ({ ...prev, [glId]: 'Mismatch Found' }));
+          }
+        }));
+      }
+      setIsMismatchAnalyzing(false);
+    };
+
     const handleReanalyze = async () => {
       if (!cslTableData || !filteredMatchmakingData) return;
       
       setIsAnalyzingGLIDs(true);
       setShowReanalyzeButton(false);
       setAnalysisProgress(10);
-      setMismatchAnalysis({});
       
       try {
         const progressTimer = setInterval(() => {
@@ -991,7 +1051,7 @@ import { Coins } from 'lucide-react';
 
           // Fetch Active Services (5002)
           try {
-            const srvRes = await fetch(`${BRIDGE_HOST}/5002/services`, {
+            const srvRes = await fetch(`${BRIDGE_HOST}:5002/services`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ glid: item.glId, AK: settings.authToken })
@@ -1012,7 +1072,7 @@ import { Coins } from 'lucide-react';
 
           // Fetch Category Report (5003)
           try {
-            const catRes = await fetch(`${BRIDGE_HOST}/5003/category`, {
+            const catRes = await fetch(`${BRIDGE_HOST}:5003/category`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ glId: item.glId })
@@ -1025,7 +1085,7 @@ import { Coins } from 'lucide-react';
 
           // Fetch BS Complaints (5004 - Redshift)
           try {
-            const compRes = await fetch(`${BRIDGE_HOST}/5004/complaints`, {
+            const compRes = await fetch(`${BRIDGE_HOST}:5004/complaints`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ glId: item.glId })
@@ -1039,7 +1099,7 @@ import { Coins } from 'lucide-react';
 
           // Fetch Supplier Ratings (5005)
           try {
-            const ratRes = await fetch(`${BRIDGE_HOST}/5005/rating`, {
+            const ratRes = await fetch(`${BRIDGE_HOST}:5005/rating`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ glId: item.glId, AK: settings.authToken })
@@ -1054,6 +1114,7 @@ import { Coins } from 'lucide-react';
           detailedSuspects.push({
             ...item,
             ...servicesData,
+            productMismatched: 'pending',
             bsComplaints: bsComplaints,
             supplierRating: supplierRating
           });
@@ -1066,7 +1127,13 @@ import { Coins } from 'lucide-react';
         clearInterval(progressTimer);
         setAnalysisProgress(100);
         setInvolvedGLIDs(detailedSuspects);
-        runMismatchAnalysis(detailedSuspects);
+        
+        // Initialize mismatch status and trigger analysis
+        const initialStatus: Record<string, any> = {};
+        detailedSuspects.forEach(s => { initialStatus[s.glId] = 'pending'; });
+        setMismatchAnalysisStatus(initialStatus);
+        runMismatchAnalysis(detailedSuspects.map(s => s.glId));
+
         setTimeout(() => setIsAnalyzingGLIDs(false), 500);
       } catch (err: any) {
         setError(err.message || 'Error during re-analysis.');
@@ -1079,61 +1146,6 @@ import { Coins } from 'lucide-react';
     };
 
     const [isFraudSearching, setIsFraudSearching] = useState(false);
-
-    const runMismatchAnalysis = async (glids: any[]) => {
-      if (!glids || glids.length === 0) return;
-
-      // Initialize status for all GLIDs
-      const initialStatus: Record<string, { status: 'pending' | 'analyzing' | 'completed', result?: string }> = {};
-      glids.forEach(item => {
-        initialStatus[item.glId] = { status: 'pending' };
-      });
-      setMismatchAnalysis(prev => ({ ...prev, ...initialStatus }));
-
-      const batchSize = 3;
-      for (let i = 0; i < glids.length; i += batchSize) {
-        const batch = glids.slice(i, i + batchSize);
-        
-        // Update status to 'analyzing'
-        setMismatchAnalysis(prev => {
-          const next = { ...prev };
-          batch.forEach(item => {
-            next[item.glId] = { ...next[item.glId], status: 'analyzing' };
-          });
-          return next;
-        });
-
-        await Promise.all(batch.map(async (item) => {
-          try {
-            // Fetch MCAT categories from port 5010
-            const mcatRes = await fetch(`${BRIDGE_HOST}/5010/mcat`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ glId: item.glId })
-            });
-            
-            let categories: string[] = [];
-            if (mcatRes.ok) {
-              const data = await mcatRes.json();
-              categories = data.mcat_categories || [];
-            }
-
-            const result = await detectMismatchWithGemini(settings.productName, categories);
-            
-            setMismatchAnalysis(prev => ({
-              ...prev,
-              [item.glId]: { status: 'completed', result }
-            }));
-          } catch (err) {
-            console.error(`Mismatch analysis failed for ${item.glId}:`, err);
-            setMismatchAnalysis(prev => ({
-              ...prev,
-              [item.glId]: { status: 'completed', result: 'Mismatch Found' }
-            }));
-          }
-        }));
-      }
-    };
 
     const timeOptions = useMemo(() => {
       const options = [];
@@ -1160,7 +1172,7 @@ import { Coins } from 'lucide-react';
       setRawFraudResponse(null);
       
       try {
-        const fraudRes = await fetch(`${BRIDGE_HOST}/5006/fraud`, {
+        const fraudRes = await fetch(`${BRIDGE_HOST}:5006/fraud`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1200,7 +1212,7 @@ import { Coins } from 'lucide-react';
       
       console.log(`[*] CSL Next Request: startTime=${cslPagination.nextStartTime}, endTime=${cslPagination.nextEndTime}`);
       try {
-        const cslResponse = await fetch(`${BRIDGE_HOST}/5000/fetch`, {
+        const cslResponse = await fetch(`${BRIDGE_HOST}:5000/fetch`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1342,7 +1354,7 @@ import { Coins } from 'lucide-react';
       try {
         // 1. Fetch CSL (First Batch)
         try {
-          const cslResponse = await fetch(`${BRIDGE_HOST}/5000/fetch`, {
+          const cslResponse = await fetch(`${BRIDGE_HOST}:5000/fetch`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1388,7 +1400,7 @@ import { Coins } from 'lucide-react';
 
         // 2. Fetch Matchmaking
         try {
-          const matchResponse = await fetch(`${BRIDGE_HOST}/5001/search`, {
+          const matchResponse = await fetch(`${BRIDGE_HOST}:5001/search`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1431,7 +1443,6 @@ import { Coins } from 'lucide-react';
       setIsAnalyzingGLIDs(true);
       setError(null);
       setInvolvedGLIDs(null);
-      setMismatchAnalysis({});
       setAnalysisProgress(10);
       
       const progressTimer = setInterval(() => {
@@ -1457,7 +1468,7 @@ import { Coins } from 'lucide-react';
 
           // Fetch Active Services (5002)
           try {
-            const srvRes = await fetch(`${BRIDGE_HOST}/5002/services`, {
+            const srvRes = await fetch(`${BRIDGE_HOST}:5002/services`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ glid: item.glId, AK: settings.authToken })
@@ -1478,7 +1489,7 @@ import { Coins } from 'lucide-react';
 
           // Fetch Category Report (5003)
           try {
-            const catRes = await fetch(`${BRIDGE_HOST}/5003/category`, {
+            const catRes = await fetch(`${BRIDGE_HOST}:5003/category`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ glId: item.glId })
@@ -1491,7 +1502,7 @@ import { Coins } from 'lucide-react';
 
           // Fetch BS Complaints (5004 - Redshift)
           try {
-            const compRes = await fetch(`${BRIDGE_HOST}/5004/complaints`, {
+            const compRes = await fetch(`${BRIDGE_HOST}:5004/complaints`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ glId: item.glId })
@@ -1505,7 +1516,7 @@ import { Coins } from 'lucide-react';
 
           // Fetch Supplier Ratings (5005)
           try {
-            const ratRes = await fetch(`${BRIDGE_HOST}/5005/rating`, {
+            const ratRes = await fetch(`${BRIDGE_HOST}:5005/rating`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ glId: item.glId, AK: settings.authToken })
@@ -1520,6 +1531,7 @@ import { Coins } from 'lucide-react';
           detailedSuspects.push({
             ...item,
             ...servicesData,
+            productMismatched: 'pending',
             bsComplaints: bsComplaints,
             supplierRating: supplierRating
           });
@@ -1532,7 +1544,13 @@ import { Coins } from 'lucide-react';
         clearInterval(progressTimer);
         setAnalysisProgress(100);
         setInvolvedGLIDs(detailedSuspects);
-        runMismatchAnalysis(detailedSuspects);
+
+        // Initialize mismatch status and trigger analysis
+        const initialStatus: Record<string, any> = {};
+        detailedSuspects.forEach(s => { initialStatus[s.glId] = 'pending'; });
+        setMismatchAnalysisStatus(initialStatus);
+        runMismatchAnalysis(detailedSuspects.map(s => s.glId));
+
         setTimeout(() => setIsAnalyzingGLIDs(false), 500);
       } catch (err: any) {
         setError(err.message || 'Error during analysis.');
@@ -2401,34 +2419,26 @@ import { Coins } from 'lucide-react';
                                       </td>
                                       <td className="px-8 py-6 border-r border-slate-50 group-hover:text-slate-900">{row.paidSince || '-'}</td>
                                       <td className="px-8 py-6 border-r border-slate-50">
-                                        {mismatchAnalysis[row.glId]?.status === 'completed' ? (
-                                          <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase border ${
-                                            mismatchAnalysis[row.glId].result === 'Mismatch Found' 
-                                              ? 'bg-rose-50 text-rose-600 border-rose-100' 
-                                              : 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                                          }`}>
-                                            {mismatchAnalysis[row.glId].result}
-                                          </span>
-                                        ) : (
-                                          <div className="flex flex-col gap-1.5 min-w-[100px]">
-                                            <div className="flex items-center justify-between text-[8px] font-black uppercase tracking-widest text-slate-400">
-                                              <span>{mismatchAnalysis[row.glId]?.status === 'analyzing' ? 'Analyzing...' : 'Pending'}</span>
-                                            </div>
-                                            <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
-                                              <motion.div 
-                                                className="h-full bg-rose-500"
-                                                initial={{ width: 0 }}
-                                                animate={{ 
-                                                  width: mismatchAnalysis[row.glId]?.status === 'analyzing' ? '100%' : '0%',
-                                                }}
-                                                transition={{ 
-                                                  duration: mismatchAnalysis[row.glId]?.status === 'analyzing' ? 2 : 0,
-                                                  repeat: mismatchAnalysis[row.glId]?.status === 'analyzing' ? Infinity : 0,
-                                                  ease: "linear"
-                                                }}
-                                              />
-                                            </div>
+                                        {mismatchAnalysisStatus[row.glId] === 'processing' ? (
+                                          <div className="flex items-center gap-3">
+                                            <div className="w-3.5 h-3.5 border-2 border-rose-500 border-t-transparent rounded-full animate-spin"></div>
+                                            <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest animate-pulse">Analyzing...</span>
                                           </div>
+                                        ) : mismatchAnalysisStatus[row.glId] === 'pending' ? (
+                                          <div className="flex items-center gap-3">
+                                            <div className="w-2 h-2 bg-slate-200 rounded-full animate-pulse"></div>
+                                            <span className="text-[10px] font-black uppercase text-slate-300 tracking-widest">Queued</span>
+                                          </div>
+                                        ) : (
+                                          <span className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest border shadow-sm transition-all duration-300 ${
+                                            mismatchAnalysisStatus[row.glId] === 'Mismatch Found' 
+                                              ? 'bg-rose-50 text-rose-600 border-rose-100 shadow-rose-50' 
+                                              : (mismatchAnalysisStatus[row.glId] === 'No Mismatch'
+                                                  ? 'bg-emerald-50 text-emerald-600 border-emerald-100 shadow-emerald-50'
+                                                  : 'bg-slate-50 text-slate-400 border-slate-100')
+                                          }`}>
+                                            {mismatchAnalysisStatus[row.glId] || 'Pending'}
+                                          </span>
                                         )}
                                       </td>
                                       <td className="px-8 py-6 border-r border-slate-50 text-center font-black">

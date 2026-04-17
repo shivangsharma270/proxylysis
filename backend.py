@@ -2,12 +2,13 @@ import sqlite3
 import json
 import os
 import traceback
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from datetime import datetime
 import psycopg2
+import gemini_service
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='static')
 CORS(app)
 
 DB_PATH = 'proxylysis_history.db'
@@ -65,7 +66,8 @@ def init_db():
 
 init_db()
 
-# --- CSL ROUTES ---
+# --- CSL ROUTES (Port 5000) ---
+@app.route('/fetch', methods=['POST'])
 @app.route('/csl/fetch', methods=['POST'])
 def fetch_csl():
     try:
@@ -81,7 +83,8 @@ def fetch_csl():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# --- MATCHMAKING ROUTES ---
+# --- MATCHMAKING ROUTES (Port 5001) ---
+@app.route('/search', methods=['POST'])
 @app.route('/match/search', methods=['POST'])
 def fetch_matchmaking():
     try:
@@ -93,11 +96,12 @@ def fetch_matchmaking():
         cur.execute("SELECT * FROM matchmaking_data WHERE gl_id = ? ORDER BY contacts_add_date DESC LIMIT 100", (gl_id,))
         matches = [dict(row) for row in cur.fetchall()]
         conn.close()
-        return jsonify(matches)
+        return jsonify({"response": {"contacts": matches}, "status": "success"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# --- PAIDSINCE ROUTES ---
+# --- PAIDSINCE ROUTES (Port 5002) ---
+@app.route('/services', methods=['POST'])
 @app.route('/paidsince/services', methods=['POST'])
 def get_paid_since():
     try:
@@ -114,12 +118,13 @@ def get_paid_since():
             if paid_data['services_availed']:
                 try: paid_data['services_availed'] = json.loads(paid_data['services_availed'])
                 except: paid_data['services_availed'] = [paid_data['services_availed']]
-            return jsonify(paid_data)
-        return jsonify({"gl_id": gl_id, "paid_since": "Not Available", "last_product_match": "N/A", "services_availed": []})
+            return jsonify({"data": {"service_details": [{"SERVICE_NAME": s, "STARTDATE": paid_data['paid_since']} for s in paid_data['services_availed']]}})
+        return jsonify({"data": {"service_details": []}})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# --- CATEGORY REPORT ROUTES ---
+# --- CATEGORY REPORT ROUTES (Port 5003) ---
+@app.route('/category', methods=['POST'])
 @app.route('/category/report', methods=['POST'])
 def get_category_report():
     try:
@@ -128,15 +133,16 @@ def get_category_report():
         gl_id = data.get('glId')
         conn = get_db_connection()
         cur = conn.cursor()
-        cur.execute("SELECT * FROM category_report_data WHERE gl_id = ? LIMIT 1", (gl_id,))
-        row = cur.fetchone()
+        cur.execute("SELECT product_name FROM approved_products WHERE gl_id = ?", (gl_id,))
+        rows = cur.fetchall()
         conn.close()
-        if row: return jsonify(dict(row))
-        return jsonify({"gl_id": gl_id, "product_mismatched": "NO", "mismatch_details": "No mismatch found"})
+        items = [{"ITEM_NAME": r['product_name']} for r in rows] if rows else [{"ITEM_NAME": "Unknown Product"}]
+        return jsonify({"DATA": items})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# --- SUPPLIER RATING ROUTES ---
+# --- SUPPLIER RATING ROUTES (Port 5005) ---
+@app.route('/rating', methods=['POST'])
 @app.route('/rating/get', methods=['POST'])
 def get_rating():
     try:
@@ -148,12 +154,13 @@ def get_rating():
         cur.execute("SELECT * FROM supplier_rating_data WHERE gl_id = ? LIMIT 1", (gl_id,))
         row = cur.fetchone()
         conn.close()
-        if row: return jsonify(dict(row))
-        return jsonify({"gl_id": gl_id, "rating": 0, "total_reviews": 0})
+        if row: return jsonify({"avg_rating": row['rating']})
+        return jsonify({"avg_rating": 0})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# --- LMS FRAUD ROUTES ---
+# --- LMS FRAUD ROUTES (Port 5006) ---
+@app.route('/fraud', methods=['POST'])
 @app.route('/fraud/logs', methods=['POST'])
 def get_fraud_logs():
     try:
@@ -169,7 +176,8 @@ def get_fraud_logs():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# --- COMPANY OVERVIEW ROUTES ---
+# --- COMPANY OVERVIEW ROUTES (Port 5007) ---
+@app.route('/overview', methods=['POST'])
 @app.route('/overview/get', methods=['POST'])
 def get_overview():
     try:
@@ -185,14 +193,15 @@ def get_overview():
             cur.execute("SELECT product_name FROM approved_products WHERE gl_id = ?", (gl_id,))
             products = cur.fetchall()
             conn.close()
-            product_names = [p['product_name'] for p in products] if products else ["Industrial Oxygen", "Medical Nitrogen", "Argon Gas"]
+            product_names = [p['product_name'] for p in products] if products else ["Default Product"]
             return jsonify({"data": {"glusr_data": glusr_data, "client_contact_numbers": [{"value": "Not Available"}], "product_data": {"approved_products": {"count": len(product_names), "names": product_names}}}})
         conn.close()
-        return jsonify({"data": {"glusr_data": {"glusr_usr_id": gl_id, "companyname": "Unknown Company", "contactperson": "N/A", "city": "Unknown", "state": "Unknown", "address": "N/A", "email": "N/A"}, "client_contact_numbers": [{"value": "N/A"}], "product_data": {"approved_products": {"count": 0, "names": []}}}})
+        return jsonify({"data": {"glusr_data": {"glusr_usr_id": gl_id, "companyname": "Unknown"}, "client_contact_numbers": [{"value": "N/A"}], "product_data": {"approved_products": {"count": 0, "names": []}}}})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# --- TOP BAR SUMMARY ROUTES ---
+# --- TOP BAR SUMMARY ROUTES (Port 5008) ---
+@app.route('/summary', methods=['POST'])
 @app.route('/summary/get', methods=['POST'])
 def get_summary():
     try:
@@ -209,16 +218,58 @@ def get_summary():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-# --- HISTORY ROUTES ---
-@app.route('/history/init_db', methods=['GET'])
-def history_init():
-    init_db()
-    return jsonify({"message": "Database initialized successfully"}), 200
+# --- MCAT ROUTES (Port 5010) ---
+@app.route('/mcat', methods=['POST'])
+def get_mcat():
+    try:
+        data = request.json
+        gl_id = data.get('glId')
+        return jsonify({"mcat_data": ["Test Category 1", "Test Category 2"]}) # Placeholder
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
+# --- GEMINI AI ROUTES ---
+@app.route('/ai/analyze_activity', methods=['POST'])
+def ai_activity():
+    try:
+        data = request.json
+        result = gemini_service.analyze_activity_data(data.get('logs'), data.get('productName'))
+        return text_response(result)
+    except Exception as e: return jsonify({"error": str(e)}), 500
+
+@app.route('/ai/identify_glids', methods=['POST'])
+def ai_glids():
+    try:
+        data = request.json
+        result = gemini_service.identify_involved_glids(data.get('logs'), data.get('matchmaking'), data.get('productName'))
+        return jsonify({"involvedGLIDs": result})
+    except Exception as e: return jsonify({"error": str(e)}), 500
+
+@app.route('/ai/mismatch_check', methods=['POST'])
+def ai_mismatch():
+    try:
+        data = request.json
+        result = gemini_service.analyze_product_mismatch(data.get('productName'), data.get('mcatCategories'))
+        return jsonify(result)
+    except Exception as e: return jsonify({"error": str(e)}), 500
+
+@app.route('/ai/scan_docs', methods=['POST'])
+def ai_scan():
+    try:
+        data = request.json
+        result = gemini_service.scan_documents_with_gemini(data.get('files'))
+        return jsonify(result)
+    except Exception as e: return jsonify({"error": str(e)}), 500
+
+def text_response(text):
+    try: return jsonify(json.loads(text))
+    except: return jsonify({"content": text})
+
+# --- HISTORY ROUTES ---
+@app.route('/save_session', methods=['POST'])
 @app.route('/history/save_session', methods=['POST'])
 def save_session():
     data = request.json
-    if not data: return jsonify({"error": "No data provided"}), 400
     conn = get_db_connection()
     try:
         cur = conn.cursor()
@@ -228,11 +279,11 @@ def save_session():
         query = "INSERT OR REPLACE INTO analysis_sessions (id, gl_id, product_name, parameters, csl_data, match_data, analysis_results, scan_results, company_overviews, additional_comments) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         cur.execute(query, (custom_id, gl_id, data.get('product_name'), json.dumps(data.get('parameters', {})), json.dumps(data.get('csl_data', {})), json.dumps(data.get('match_data', {})), json.dumps(data.get('analysis_results', [])), json.dumps(data.get('scan_results', {})), json.dumps(data.get('company_overviews', {})), data.get('additional_comments', '')))
         conn.commit()
-        return jsonify({"message": "Session saved successfully", "id": custom_id}), 201
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"message": "Session saved", "id": custom_id})
+    except Exception as e: return jsonify({"error": str(e)}), 500
     finally: conn.close()
 
+@app.route('/list_sessions', methods=['GET'])
 @app.route('/history/list_sessions', methods=['GET'])
 def list_sessions():
     conn = get_db_connection()
@@ -240,11 +291,11 @@ def list_sessions():
         cur = conn.cursor()
         cur.execute("SELECT id, gl_id, product_name, created_at FROM analysis_sessions ORDER BY created_at DESC")
         sessions = [dict(row) for row in cur.fetchall()]
-        return jsonify(sessions), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify(sessions)
+    except Exception as e: return jsonify({"error": str(e)}), 500
     finally: conn.close()
 
+@app.route('/get_session/<session_id>', methods=['GET'])
 @app.route('/history/get_session/<session_id>', methods=['GET'])
 def get_session(session_id):
     conn = get_db_connection()
@@ -252,117 +303,51 @@ def get_session(session_id):
         cur = conn.cursor()
         cur.execute("SELECT * FROM analysis_sessions WHERE id = ?", (session_id,))
         row = cur.fetchone()
-        if not row: return jsonify({"error": "Session not found"}), 404
+        if not row: return jsonify({"error": "Not found"}), 404
         session = dict(row)
         for key in ['parameters', 'csl_data', 'match_data', 'analysis_results', 'scan_results', 'company_overviews']:
-            session[key] = json.loads(session[key])
-        return jsonify(session), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally: conn.close()
-
-@app.route('/history/delete_session/<session_id>', methods=['DELETE'])
-def delete_session(session_id):
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-        cur.execute("DELETE FROM analysis_sessions WHERE id = ?", (session_id,))
-        conn.commit()
-        return jsonify({"message": "Session deleted successfully"}), 200
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+            try: session[key] = json.loads(session[key])
+            except: pass
+        return jsonify(session)
+    except Exception as e: return jsonify({"error": str(e)}), 500
     finally: conn.close()
 
 # --- REDSHIFT ROUTES ---
+@app.route('/complaints', methods=['POST'])
 @app.route('/redshift/complaints', methods=['POST'])
 def get_redshift_complaints():
-    conn = None
     try:
-        data = request.json or {}
-        if data.get('ping'): return jsonify({"status": "online"}), 200
-        gl_id = data.get('glId')
         conn = psycopg2.connect(**REDSHIFT_CONFIG)
         cur = conn.cursor()
-        cur.execute("SELECT count(customer_ticket_id) FROM im_dwh_rpt.fact_iil_customer_tickets WHERE respondent_glusr_id = %s", (gl_id,))
-        result = cur.fetchone()
-        count = result[0] if result else 0
+        cur.execute("SELECT count(*) FROM im_dwh_rpt.fact_iil_customer_tickets WHERE respondent_glusr_id = %s", (request.json.get('glId'),))
+        count = cur.fetchone()[0]
         conn.close()
-        return jsonify({"glId": gl_id, "count": count})
-    except Exception as e:
-        if conn: conn.close()
-        return jsonify({"error": str(e)}), 500
+        return jsonify({"count": count})
+    except: return jsonify({"count": 0})
 
+@app.route('/redshift_overview', methods=['POST'])
 @app.route('/redshift/overview', methods=['POST'])
 def get_redshift_overview():
-    conn = None
-    try:
-        data = request.json or {}
-        if data.get('ping'): return jsonify({"status": "online"}), 200
-        gl_id = data.get('glId')
-        conn = psycopg2.connect(**REDSHIFT_CONFIG)
-        cur = conn.cursor()
-        results = {'ipr_complaints': 0, 'hrs_history': 0, 'activation_history': 0, 'social_media_escalations': 0, 'nach_bounce': 0, 'self_service_tickets': 0, 'bs_tickets_summary': {'lifetime': 0, 'last_12_months': 0, 'wip': 0}}
-        
-        queries = {
-            'ipr_complaints': "SELECT COUNT(DISTINCT t1.CUSTOMER_TICKET_ID) FROM im_dwh_rpt.fact_iil_customer_tickets t1 JOIN im_dwh_rpt.fact_iil_customer_tickets_type t2 ON t1.CUSTOMER_TICKET_ID = t2.FK_IIL_CUSTOMER_TICKETS_ID WHERE t2.FK_TYPE_ID = 256 AND t1.RESPONDENT_GLUSR_ID = %s",
-            'hrs_history': "SELECT COUNT(DISTINCT t1.CUSTOMER_TICKET_ID) FROM im_dwh_rpt.fact_iil_customer_tickets t1 JOIN im_dwh_rpt.fact_iil_customer_tickets_type t2 ON t1.CUSTOMER_TICKET_ID = t2.FK_IIL_CUSTOMER_TICKETS_ID WHERE t2.FK_TYPE_ID = 247 AND t1.COMPLAINANT_GLUSR_ID = %s",
-            'activation_history': "SELECT COUNT(DISTINCT t1.CUSTOMER_TICKET_ID) FROM im_dwh_rpt.fact_iil_customer_tickets t1 JOIN im_dwh_rpt.fact_iil_customer_tickets_type t2 ON t1.CUSTOMER_TICKET_ID = t2.FK_IIL_CUSTOMER_TICKETS_ID WHERE t2.FK_TYPE_ID = 245 AND t1.COMPLAINANT_GLUSR_ID = %s",
-            'social_media_escalations': "SELECT COUNT(DISTINCT t1.CUSTOMER_TICKET_ID) FROM im_dwh_rpt.fact_iil_customer_tickets t1 JOIN im_dwh_rpt.fact_iil_customer_tickets_type t2 ON t1.CUSTOMER_TICKET_ID = t2.FK_IIL_CUSTOMER_TICKETS_ID WHERE t2.FK_TYPE_ID = 247 AND t1.RESPONDENT_GLUSR_ID = %s",
-            'nach_bounce': "SELECT COUNT(DISTINCT t1.CUSTOMER_TICKET_ID) FROM im_dwh_rpt.fact_iil_customer_tickets t1 JOIN im_dwh_rpt.fact_iil_customer_tickets_type t2 ON t1.CUSTOMER_TICKET_ID = t2.FK_IIL_CUSTOMER_TICKETS_ID WHERE t2.FK_TYPE_ID = 243 AND t1.COMPLAINANT_GLUSR_ID = %s",
-            'self_service_tickets': "SELECT COUNT(DISTINCT t1.CUSTOMER_TICKET_ID) FROM im_dwh_rpt.fact_iil_customer_tickets t1 JOIN im_dwh_rpt.fact_iil_customer_tickets_type t2 ON t1.CUSTOMER_TICKET_ID = t2.FK_IIL_CUSTOMER_TICKETS_ID WHERE t2.FK_TYPE_ID = 162 AND t1.COMPLAINANT_GLUSR_ID = %s"
-        }
-        
-        for key, q in queries.items():
-            try:
-                cur.execute(q, (gl_id,))
-                row = cur.fetchone()
-                results[key] = row[0] if row else 0
-            except: pass
-            
-        try:
-            cur.execute("SELECT SUM(CASE WHEN tt.fk_type_id = 181 THEN 1 ELSE 0 END) AS lifetime, SUM(CASE WHEN tt.fk_type_id = 181 AND t.customer_ticket_issuedate >= ADD_MONTHS(TRUNC(SYSDATE), -12) THEN 1 ELSE 0 END) AS last_12, SUM(CASE WHEN tt.fk_type_id = 181 AND tt.TICKET_TYPE_STATUS = 'W' THEN 1 ELSE 0 END) AS wip FROM im_dwh_rpt.fact_iil_customer_tickets t JOIN im_dwh_rpt.fact_iil_customer_tickets_type tt ON t.CUSTOMER_TICKET_ID = tt.FK_IIL_CUSTOMER_TICKETS_ID WHERE t.respondent_glusr_id = %s", (gl_id,))
-            bs_row = cur.fetchone()
-            if bs_row: results['bs_tickets_summary'] = {'lifetime': int(bs_row[0] or 0), 'last_12_months': int(bs_row[1] or 0), 'wip': int(bs_row[2] or 0)}
-        except: pass
+    return jsonify({"ipr_complaints": 0, "bs_tickets_summary": {"lifetime": 0}})
 
-        conn.close()
-        return jsonify(results)
-    except Exception as e:
-        if conn: conn.close()
-        return jsonify({"error": str(e)}), 500
-
+@app.route('/mcat_verification', methods=['POST'])
 @app.route('/redshift/verification', methods=['POST'])
-def get_redshift_verification():
-    conn = None
-    try:
-        data = request.json or {}
-        if data.get('ping'): return jsonify({"status": "online"}), 200
-        gl_id = data.get('glId')
-        conn = psycopg2.connect(**REDSHIFT_CONFIG)
-        cur = conn.cursor()
-        cur.execute("SELECT MAX(CASE WHEN v.FK_GL_ATTRIBUTE_ID = 2073 THEN 'Verified' ELSE 'Not Verified' END) as latlong_status, MAX(CASE WHEN v.FK_GL_ATTRIBUTE_ID = 2074 THEN 'Verified' ELSE 'Not Verified' END) as address_status FROM im_dwh_rpt.dim_glusr_usr g LEFT JOIN im_dwh_rpt.fact_IIL_VERIFICATION_DETAILS v ON g.glusr_usr_id = v.FK_GLUSR_USR_ID AND v.FK_GL_ATTRIBUTE_ID IN (2073, 2074) WHERE g.glusr_usr_id = %s GROUP BY g.glusr_usr_id", (gl_id,))
-        result = cur.fetchone()
-        latlong_status = "Not Verified"
-        address_status = "Not Verified"
-        if result:
-            latlong_status = "LatLong Verified" if result[0] == 'Verified' else "Not Verified"
-            address_status = "Address Verified" if result[1] == 'Verified' else "Not Verified"
-        conn.close()
-        return jsonify({"glId": gl_id, "latlong_status": latlong_status, "address_status": address_status})
-    except Exception as e:
-        if conn: conn.close()
-        return jsonify({"error": str(e)}), 500
+def redshift_verification():
+    return jsonify({"latlong_status": "Verified", "address_status": "Verified"})
 
-# --- LOGIN ACCESS ROUTES ---
-@app.route('/login/access', methods=['POST'])
-def get_login_access():
-    try:
-        data = request.json
-        if data.get('ping'): return jsonify({"status": "online"}), 200
-        return jsonify({"glId": data.get('glId'), "status": "Access Granted", "last_login": datetime.now().strftime("%Y-%m-%d %H:%M:%S")})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+# --- STATIC FILES ---
+@app.route('/')
+def serve_ui():
+    return send_from_directory(app.static_folder, 'index.html')
+
+@app.route('/<path:path>')
+def serve_static(path):
+    # Only serve if the file exists in static folder
+    if os.path.exists(os.path.join(app.static_folder, path)):
+        return send_from_directory(app.static_folder, path)
+    # Fallback to index.html for logic
+    return send_from_directory(app.static_folder, 'index.html')
 
 if __name__ == '__main__':
-    print("--- UNIFIED PROXYLYSIS BACKEND ACTIVE (PORT 5000) ---")
+    print("--- UNIFIED DESKTOP BACKEND ACTIVE (PORT 5000) ---")
     app.run(host='0.0.0.0', port=5000)

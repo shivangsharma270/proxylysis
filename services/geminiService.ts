@@ -177,84 +177,34 @@ Return ONLY the JSON object.`;
 };
 
 /**
- * Uses advanced regex and word-overlap logic to determine if the identified 'Last Product' matches the seller's categories.
- * Returns 'No' if a match is found locally, otherwise returns 'Manual Checkup'.
+ * Uses Gemini to determine if the Product is a subset or relevant match within the MCAT categories.
  */
-export const analyzeProductMismatch = async (lastProduct: string, sellerItems: string[]) => {
-  if (!lastProduct || !sellerItems || sellerItems.length === 0) return "Manual Checkup";
-
-  // 1. Advanced Local Matching Logic (Regex & Word Overlap)
-  const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
-  const normalizedProduct = normalize(lastProduct);
-  const productWords = normalizedProduct.split(/\s+/).filter(w => w.length > 2);
-
-  const isLocalMatch = sellerItems.some(item => {
-    const normalizedItem = normalize(item);
-    
-    // Exact or substring match
-    if (normalizedItem === normalizedProduct || normalizedItem.includes(normalizedProduct) || normalizedProduct.includes(normalizedItem)) {
-      return true;
-    }
-
-    // Word overlap check
-    const itemWords = normalizedItem.split(/\s+/);
-    const commonWords = productWords.filter(w => itemWords.includes(w));
-    
-    // If at least 2 significant words match or 50% of the product words match
-    if (commonWords.length >= Math.max(2, Math.ceil(productWords.length * 0.5))) {
-      return true;
-    }
-
-    // Regex match for specific patterns (e.g., brand names or model numbers)
-    try {
-      const escapedProduct = normalizedProduct.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const regex = new RegExp(`\\b${escapedProduct}\\b`, 'i');
-      if (regex.test(normalizedItem)) return true;
-    } catch (e) {
-      // Ignore regex errors
-    }
-
-    return false;
-  });
-
-  if (isLocalMatch) {
-    console.log(`[*] Local match found for "${lastProduct}" in seller catalog.`);
-    return "No"; // No mismatch found locally
-  }
-
-  // If local matching fails, return "Manual Checkup" as requested
-  return "Manual Checkup";
-};
-
-/**
- * Uses Gemini to determine if a target product matches or is a subset of a seller's MCAT categories.
- */
-export const detectMismatchWithGemini = async (productName: string, mcatCategories: string[]) => {
+export const analyzeProductMismatch = async (productName: string, mcatCategories: string[]) => {
   if (!productName || !mcatCategories || mcatCategories.length === 0) {
-    return "Mismatch"; // Default to mismatch if no data to compare
+    return "Mismatch";
   }
 
-  const systemInstruction = `You are a conflict intelligence auditor. Your task is to determine if a "Target Product" is a subset of, or semantically relevant to, a list of "Seller Categories" (MCATs).
+  const systemInstruction = `You are a product category expert. Your task is to determine if a specific "Product" is a subset of, or a relevant match for, a list of "MCAT Categories".
 
-ANALYSIS RULES:
-1. NO MISMATCH: If the Target Product is a direct match, a subset, a synonym, or highly relevant to any of the Seller Categories.
-2. MISMATCH: If the Target Product is completely unrelated to the Seller Categories.
-3. CONTEXT: Consider industry synonyms and category hierarchies (e.g., "iPhone" is a subset of "Mobile Phones").
+LOGIC:
+- A "No Mismatch" occurs if the Product is a type of item, a specific model, a synonym, or a subset that logically falls under any of the provided MCAT Categories.
+- A "Mismatch" occurs if the Product is completely unrelated to all the provided MCAT Categories.
+
+INPUT:
+- Product: ${productName}
+- MCAT Categories: ${mcatCategories.join(", ")}
 
 OUTPUT:
-Return a JSON object with a single key "result" which must be either "No Mismatch" or "Mismatch Found".
+Return a JSON object with a single key "result" which must be either "No Mismatch" or "Mismatch".
 Return ONLY the JSON object.`;
 
-  const prompt = `Target Product: ${productName}
-Seller Categories: ${mcatCategories.join(", ")}`;
-
   try {
-    const text = await callGateway(systemInstruction, prompt, true);
+    const text = await callGateway(systemInstruction, `Compare Product "${productName}" with Categories: ${mcatCategories.join(", ")}`, true);
     const parsed = JSON.parse(text.trim());
-    return parsed.result || "Mismatch Found";
+    return parsed.result || "Mismatch";
   } catch (error) {
-    console.error("Gemini Mismatch Detection error:", error);
-    return "Mismatch Found"; // Fallback
+    console.error("Product Mismatch Analysis error:", error);
+    return "Mismatch";
   }
 };
 
