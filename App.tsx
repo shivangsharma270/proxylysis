@@ -158,7 +158,7 @@ import { Coins } from 'lucide-react';
           additional_comments: additionalComments
         };
 
-        const res = await fetch(`${BRIDGE_HOST}/save_session`, {
+        const res = await fetch(`${BRIDGE_HOST}:5009/save_session`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -181,7 +181,7 @@ import { Coins } from 'lucide-react';
     const fetchHistory = async () => {
       setIsHistoryLoading(true);
       try {
-        const res = await fetch(`${BRIDGE_HOST}/list_sessions`);
+        const res = await fetch(`${BRIDGE_HOST}:5009/list_sessions`);
         if (res.ok) {
           const data = await res.json();
           setHistorySessions(data);
@@ -196,7 +196,7 @@ import { Coins } from 'lucide-react';
     const loadSession = async (sessionId: string) => {
       setIsHistoryLoading(true);
       try {
-        const res = await fetch(`${BRIDGE_HOST}/get_session/${sessionId}`);
+        const res = await fetch(`${BRIDGE_HOST}:5009/get_session/${sessionId}`);
         if (res.ok) {
           const session = await res.json();
           
@@ -231,7 +231,7 @@ import { Coins } from 'lucide-react';
     const deleteSession = async (sessionId: string) => {
       if (!confirm("Are you sure you want to delete this session?")) return;
       try {
-        const res = await fetch(`${BRIDGE_HOST}/delete_session/${sessionId}`, {
+        const res = await fetch(`${BRIDGE_HOST}:5009/delete_session/${sessionId}`, {
           method: 'DELETE'
         });
         if (res.ok) {
@@ -352,11 +352,8 @@ import { Coins } from 'lucide-react';
     const matchColumnSelectorRef = useRef<HTMLDivElement>(null);
     const [isMatchColumnSelectorOpen, setIsMatchColumnSelectorOpen] = useState(false);
 
-    // Detect if we are on Vercel or local. 
-    // If on Vercel, default to localhost:3000 for the backend.
-    const BRIDGE_HOST = window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1')
-        ? '' // Same origin (relative paths)
-        : 'http://localhost:3000'; // Target local backend from Vercel
+    // Target local backend from Vercel/Localhost
+    const BRIDGE_HOST = 'http://localhost';
 
     // 47 Parameters for CSL
     const cslParameters = [
@@ -505,12 +502,12 @@ import { Coins } from 'lucide-react';
         let historyOk = false;
 
         try {
-          const historyRes = await fetch(`${BRIDGE_HOST}/list_sessions`);
+          const historyRes = await fetch(`${BRIDGE_HOST}:5009/list_sessions`);
           historyOk = historyRes.ok;
         } catch {}
 
         try {
-          const cslRes = await fetch(`${BRIDGE_HOST}/fetch`, { 
+          const cslRes = await fetch(`${BRIDGE_HOST}:5000/fetch`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -519,7 +516,7 @@ import { Coins } from 'lucide-react';
         } catch {}
 
         try {
-          const matchRes = await fetch(`${BRIDGE_HOST}/search`, { 
+          const matchRes = await fetch(`${BRIDGE_HOST}:5001/search`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -528,7 +525,7 @@ import { Coins } from 'lucide-react';
         } catch {}
 
         try {
-          const servicesRes = await fetch(`${BRIDGE_HOST}/services`, { 
+          const servicesRes = await fetch(`${BRIDGE_HOST}:5002/services`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -537,7 +534,7 @@ import { Coins } from 'lucide-react';
         } catch {}
 
         try {
-          const categoryRes = await fetch(`${BRIDGE_HOST}/category`, { 
+          const categoryRes = await fetch(`${BRIDGE_HOST}:5003/category`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -546,7 +543,7 @@ import { Coins } from 'lucide-react';
         } catch {}
 
         try {
-          const complaintsRes = await fetch(`${BRIDGE_HOST}/complaints`, { 
+          const complaintsRes = await fetch(`${BRIDGE_HOST}:5004/complaints`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -555,7 +552,7 @@ import { Coins } from 'lucide-react';
         } catch {}
 
         try {
-          const ratingsRes = await fetch(`${BRIDGE_HOST}/rating`, { 
+          const ratingsRes = await fetch(`${BRIDGE_HOST}:5005/rating`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -564,7 +561,7 @@ import { Coins } from 'lucide-react';
         } catch {}
 
         try {
-          const fraudRes = await fetch(`${BRIDGE_HOST}/fraud`, { 
+          const fraudRes = await fetch(`${BRIDGE_HOST}:5006/fraud`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -573,7 +570,7 @@ import { Coins } from 'lucide-react';
         } catch {}
 
         try {
-          const overviewRes = await fetch(`${BRIDGE_HOST}/overview`, { 
+          const overviewRes = await fetch(`${BRIDGE_HOST}:5007/overview`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -582,7 +579,7 @@ import { Coins } from 'lucide-react';
         } catch {}
 
         try {
-          const summaryRes = await fetch(`${BRIDGE_HOST}/summary`, { 
+          const summaryRes = await fetch(`${BRIDGE_HOST}:5008/summary`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -635,22 +632,22 @@ import { Coins } from 'lucide-react';
             if (!sessionOverviews[glid]) {
               try {
                 const [merpRes, rsRes, sumRes, mcatRes] = await Promise.all([
-                  fetch(`${BRIDGE_HOST}/overview`, {
+                  fetch(`${BRIDGE_HOST}:5007/overview`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ glid, AK: settings.authToken })
                   }),
-                  fetch(`${BRIDGE_HOST}/redshift_overview`, {
+                  fetch(`${BRIDGE_HOST}:5004/redshift_overview`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ glId: glid })
                   }),
-                  fetch(`${BRIDGE_HOST}/summary`, {
+                  fetch(`${BRIDGE_HOST}:5008/summary`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ glid })
                   }),
-                  fetch(`${BRIDGE_HOST}/mcat`, {
+                  fetch(`${BRIDGE_HOST}:5010/mcat`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ glId: glid })
@@ -887,7 +884,7 @@ import { Coins } from 'lucide-react';
       });
 
       // 4. Fetch LatLong Status
-      fetch(`${BRIDGE_HOST}/bs_complaints`, {
+      fetch(`${BRIDGE_HOST}:5004/bs_complaints`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ glId: glid })
@@ -992,7 +989,7 @@ import { Coins } from 'lucide-react';
             let mcatCategories = sessionOverviews[glId]?.mcat;
             
             if (!mcatCategories) {
-              const mcatRes = await fetch(`${BRIDGE_HOST}/mcat`, {
+              const mcatRes = await fetch(`${BRIDGE_HOST}:5010/mcat`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ glId })
@@ -1176,7 +1173,7 @@ import { Coins } from 'lucide-react';
       setRawFraudResponse(null);
       
       try {
-        const fraudRes = await fetch(`${BRIDGE_HOST}/fraud`, {
+        const fraudRes = await fetch(`${BRIDGE_HOST}:5006/fraud`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1216,7 +1213,7 @@ import { Coins } from 'lucide-react';
       
       console.log(`[*] CSL Next Request: startTime=${cslPagination.nextStartTime}, endTime=${cslPagination.nextEndTime}`);
       try {
-        const cslResponse = await fetch(`${BRIDGE_HOST}/fetch`, {
+        const cslResponse = await fetch(`${BRIDGE_HOST}:5000/fetch`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1358,7 +1355,7 @@ import { Coins } from 'lucide-react';
       try {
         // 1. Fetch CSL (First Batch)
         try {
-          const cslResponse = await fetch(`${BRIDGE_HOST}/fetch`, {
+          const cslResponse = await fetch(`${BRIDGE_HOST}:5000/fetch`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1404,7 +1401,7 @@ import { Coins } from 'lucide-react';
 
         // 2. Fetch Matchmaking
         try {
-          const matchResponse = await fetch(`${BRIDGE_HOST}/search`, {
+          const matchResponse = await fetch(`${BRIDGE_HOST}:5001/search`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
