@@ -352,9 +352,7 @@ import { Coins } from 'lucide-react';
     const matchColumnSelectorRef = useRef<HTMLDivElement>(null);
     const [isMatchColumnSelectorOpen, setIsMatchColumnSelectorOpen] = useState(false);
 
-    const BRIDGE_HOST = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
-      ? window.location.origin 
-      : 'http://localhost:3000';
+    const BRIDGE_HOST = window.location.origin; // Dynamically detect host (e.g. localhost:5000 or vercel URL)
 
     // 47 Parameters for CSL
     const cslParameters = [
@@ -503,12 +501,12 @@ import { Coins } from 'lucide-react';
         let historyOk = false;
 
         try {
-          const historyRes = await fetch(`${BRIDGE_HOST}/list_sessions`);
+          const historyRes = await fetch(`/list_sessions`);
           historyOk = historyRes.ok;
         } catch {}
 
         try {
-          const cslRes = await fetch(`${BRIDGE_HOST}/fetch`, { 
+          const cslRes = await fetch(`/fetch`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -517,7 +515,7 @@ import { Coins } from 'lucide-react';
         } catch {}
 
         try {
-          const matchRes = await fetch(`${BRIDGE_HOST}/search`, { 
+          const matchRes = await fetch(`/search`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -526,7 +524,7 @@ import { Coins } from 'lucide-react';
         } catch {}
 
         try {
-          const servicesRes = await fetch(`${BRIDGE_HOST}/services`, { 
+          const servicesRes = await fetch(`/services`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -535,7 +533,7 @@ import { Coins } from 'lucide-react';
         } catch {}
 
         try {
-          const categoryRes = await fetch(`${BRIDGE_HOST}/category`, { 
+          const categoryRes = await fetch(`/category`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -544,7 +542,7 @@ import { Coins } from 'lucide-react';
         } catch {}
 
         try {
-          const complaintsRes = await fetch(`${BRIDGE_HOST}/complaints`, { 
+          const complaintsRes = await fetch(`/complaints`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -553,7 +551,7 @@ import { Coins } from 'lucide-react';
         } catch {}
 
         try {
-          const ratingsRes = await fetch(`${BRIDGE_HOST}/rating`, { 
+          const ratingsRes = await fetch(`/rating`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -562,7 +560,7 @@ import { Coins } from 'lucide-react';
         } catch {}
 
         try {
-          const fraudRes = await fetch(`${BRIDGE_HOST}/fraud`, { 
+          const fraudRes = await fetch(`/fraud`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -571,7 +569,7 @@ import { Coins } from 'lucide-react';
         } catch {}
 
         try {
-          const overviewRes = await fetch(`${BRIDGE_HOST}/overview`, { 
+          const overviewRes = await fetch(`/overview`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -580,7 +578,7 @@ import { Coins } from 'lucide-react';
         } catch {}
 
         try {
-          const summaryRes = await fetch(`${BRIDGE_HOST}/summary`, { 
+          const summaryRes = await fetch(`/summary`, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify({ ping: true }) 
@@ -990,7 +988,7 @@ import { Coins } from 'lucide-react';
             let mcatCategories = sessionOverviews[glId]?.mcat;
             
             if (!mcatCategories) {
-              const mcatRes = await fetch(`${BRIDGE_HOST}/mcat`, {
+              const mcatRes = await fetch(`/mcat`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ glId })
@@ -1053,7 +1051,7 @@ import { Coins } from 'lucide-react';
 
           // Fetch Active Services (5002)
           try {
-            const srvRes = await fetch(`${BRIDGE_HOST}/services`, {
+            const srvRes = await fetch(`${BRIDGE_HOST}:5002/services`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ glid: item.glId, AK: settings.authToken })
@@ -1174,7 +1172,7 @@ import { Coins } from 'lucide-react';
       setRawFraudResponse(null);
       
       try {
-        const fraudRes = await fetch(`${BRIDGE_HOST}/fraud`, {
+        const fraudRes = await fetch(`/fraud`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -1356,7 +1354,7 @@ import { Coins } from 'lucide-react';
       try {
         // 1. Fetch CSL (First Batch)
         try {
-          const cslResponse = await fetch(`${BRIDGE_HOST}/fetch`, {
+          const cslResponse = await fetch(`/fetch`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1402,7 +1400,7 @@ import { Coins } from 'lucide-react';
 
         // 2. Fetch Matchmaking
         try {
-          const matchResponse = await fetch(`${BRIDGE_HOST}/search`, {
+          const matchResponse = await fetch(`/search`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1470,7 +1468,7 @@ import { Coins } from 'lucide-react';
 
           // Fetch Active Services (5002)
           try {
-            const srvRes = await fetch(`${BRIDGE_HOST}/services`, {
+            const srvRes = await fetch(`${BRIDGE_HOST}:5002/services`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ glid: item.glId, AK: settings.authToken })
@@ -1598,16 +1596,16 @@ import { Coins } from 'lucide-react';
                   <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-4 pb-2 border-b border-slate-100">Service Connectivity</h3>
                   <div className="grid grid-cols-1 gap-3">
                     {[
-                      { id: 'CSL', status: backendStatus.csl, color: 'bg-blue-500' },
-                      { id: 'LMS', status: backendStatus.match, color: 'bg-indigo-500' },
-                      { id: 'MERP', status: backendStatus.services, color: 'bg-violet-500' },
-                      { id: 'CAT', status: backendStatus.category, color: 'bg-purple-500' },
-                      { id: 'REDSHIFT', status: backendStatus.complaints, color: 'bg-rose-500' },
-                      { id: 'RATINGS', status: backendStatus.ratings, color: 'bg-amber-500' },
-                      { id: 'FRAUD', status: backendStatus.fraud, color: 'bg-pink-500' },
-                      { id: 'OVERVIEW', status: backendStatus.overview, color: 'bg-cyan-500' },
-                      { id: 'SUMMARY', status: backendStatus.summary, color: 'bg-teal-500' },
-                      { id: 'HISTORY', status: backendStatus.history, color: 'bg-slate-500' },
+                      { id: 'CSL', port: 5000, status: backendStatus.csl, color: 'bg-blue-500' },
+                      { id: 'LMS', port: 5001, status: backendStatus.match, color: 'bg-indigo-500' },
+                      { id: 'MERP', port: 5002, status: backendStatus.services, color: 'bg-violet-500' },
+                      { id: 'CAT', port: 5003, status: backendStatus.category, color: 'bg-purple-500' },
+                      { id: 'REDSHIFT', port: 5004, status: backendStatus.complaints, color: 'bg-rose-500' },
+                      { id: 'RATINGS', port: 5005, status: backendStatus.ratings, color: 'bg-amber-500' },
+                      { id: 'FRAUD', port: 5006, status: backendStatus.fraud, color: 'bg-pink-500' },
+                      { id: 'OVERVIEW', port: 5007, status: backendStatus.overview, color: 'bg-cyan-500' },
+                      { id: 'SUMMARY', port: 5008, status: backendStatus.summary, color: 'bg-teal-500' },
+                      { id: 'HISTORY', port: 5009, status: backendStatus.history, color: 'bg-slate-500' },
                     ].map((svc) => (
                       <div key={svc.id} className="flex items-center justify-between group/item">
                         <div className="flex items-center gap-3">
