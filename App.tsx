@@ -163,7 +163,9 @@ import { Coins } from 'lucide-react';
 
         const result = await historyService.saveSession(payload);
         alert(`Session saved successfully! (ID: ${result.id})`);
+        fetchHistory(); // Refresh history list after save
       } catch (err: any) {
+        console.error("Save Session Error:", err);
         setError("Save Error: " + err.message);
       } finally {
         setIsSavingSession(false);
@@ -172,11 +174,17 @@ import { Coins } from 'lucide-react';
 
     const fetchHistory = async () => {
       setIsHistoryLoading(true);
+      setError(null);
       try {
         const data = await historyService.listSessions();
-        setHistorySessions(data);
-      } catch (err) {
+        if (data && Array.isArray(data)) {
+          setHistorySessions(data);
+        } else {
+          setHistorySessions([]);
+        }
+      } catch (err: any) {
         console.error("Fetch History Error:", err);
+        setError("History Load Error: " + err.message);
       } finally {
         setIsHistoryLoading(false);
       }
@@ -3326,9 +3334,19 @@ import { Coins } from 'lucide-react';
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Stored Intelligence Sessions</p>
                   </div>
                 </div>
-                <button onClick={() => setIsHistoryModalOpen(false)} className="p-2 hover:bg-white/10 rounded-xl transition-all">
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={fetchHistory}
+                    disabled={isHistoryLoading}
+                    className="p-2 hover:bg-white/10 rounded-xl transition-all text-white/50 hover:text-white"
+                    title="Refresh History"
+                  >
+                    <svg className={`w-5 h-5 ${isHistoryLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                  </button>
+                  <button onClick={() => setIsHistoryModalOpen(false)} className="p-2 hover:bg-white/10 rounded-xl transition-all">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+                  </button>
+                </div>
               </div>
 
               <div className="p-8 border-b border-slate-100 bg-slate-50/50">

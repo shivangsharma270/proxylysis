@@ -33,8 +33,11 @@ export const historyService = {
     const payload = {
       action: 'save',
       id: customId,
+      created_at: new Date().toISOString(),
       ...data,
     };
+
+    console.log("Saving session to Google Sheets:", customId, payload);
 
     try {
         // Use text/plain to avoid preflight OPTIONS request
@@ -48,9 +51,10 @@ export const historyService = {
         });
         if (!corsResponse.ok) throw new Error('CORS request failed');
         const result = await corsResponse.json();
+        console.log("Save successful:", result);
         return result;
     } catch (e) {
-        console.warn("Standard fetch failed or returned non-JSON, attempting no-cors save as fallback.");
+        console.warn("Standard fetch failed or returned non-JSON, attempting no-cors save as fallback.", e);
         await fetch(SCRIPT_URL, {
             method: 'POST',
             mode: 'no-cors',
@@ -68,10 +72,27 @@ export const historyService = {
    */
   listSessions: async (): Promise<HistorySession[]> => {
     try {
+      console.log("Fetching history from:", SCRIPT_URL);
       const response = await fetch(`${SCRIPT_URL}?action=list`);
       if (!response.ok) throw new Error('Failed to fetch history');
-      const data = await response.json();
-      return (Array.isArray(data) ? data : []).filter(s => s && (s.id || s.gl_id));
+      const json = await response.json();
+      console.log("History raw response:", json);
+      
+      // Handle various GAS return structures
+      let list = [];
+      if (Array.isArray(json)) {
+        list = json;
+      } else if (json && Array.isArray(json.data)) {
+        list = json.data;
+      } else if (json && Array.isArray(json.sessions)) {
+        list = json.sessions;
+      } else if (json && json.status === 'success' && Array.isArray(json.data)) {
+        list = json.data;
+      }
+
+      const filtered = list.filter(s => s && (s.id || s.gl_id));
+      console.log("Processed sessions list:", filtered);
+      return filtered;
     } catch (e) {
       console.error("List sessions error:", e);
       return [];
@@ -83,16 +104,27 @@ export const historyService = {
    */
   getSession: async (sessionId: string): Promise<HistorySession | null> => {
     try {
+      console.log("Fetching session snapshot:", sessionId);
       const response = await fetch(`${SCRIPT_URL}?action=get&id=${sessionId}`);
       if (!response.ok) throw new Error(`Failed to fetch session ${sessionId}`);
-      const data = await response.json();
+      const json = await response.json();
+      console.log("Session raw response:", json);
       
-      if (!data || data.error) return null;
+      // Handle GAS wrapping in .data
+      const data = (json && json.data && !Array.isArray(json.data)) ? json.data : json;
+      
+      if (!data || data.error) {
+        console.error("Session data error or missing:", data);
+        return null;
+      }
 
       // Some GAS scripts return strings that need parsing
       const parseIfString = (val: any) => {
-        if (typeof val === 'string' && (val.startsWith('{') || val.startsWith('['))) {
-          try { return JSON.parse(val); } catch { return val; }
+        if (typeof val === 'string') {
+          const trimmed = val.trim();
+          if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+            try { return JSON.parse(trimmed); } catch { return val; }
+          }
         }
         return val;
       };
@@ -105,6 +137,7 @@ export const historyService = {
       data.mcat_data = parseIfString(data.mcat_data);
       data.company_overviews = parseIfString(data.company_overviews);
       
+      console.log("Parsed session data:", data);
       return data;
     } catch (e) {
       console.error("Get session error:", e);
