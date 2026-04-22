@@ -1,8 +1,11 @@
 import requests
 import json
+import os
 
 GATEWAY_URL = "https://imllm.intermesh.net/v1/chat/completions"
-ACCESS_KEY = "sk-tjw8L1Ya0ERxH55JuSQQQQ"
+ACCESS_KEY = os.environ.get("GEMINI_API_KEY")
+if not ACCESS_KEY:
+    print("[!] Warning: GEMINI_API_KEY not found in environment variables.")
 DEFAULT_MODEL = "google/gemini-2.5-pro"
 
 def call_gateway(system_instruction, user_prompt, is_json=False):

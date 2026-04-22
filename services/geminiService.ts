@@ -1,7 +1,10 @@
 
 
 const GATEWAY_URL = "https://imllm.intermesh.net/v1/chat/completions";
-const ACCESS_KEY = "sk-tjw8L1Ya0ERxH55JuSQQQQ";
+const ACCESS_KEY = (process.env.GEMINI_API_KEY as string);
+if (!ACCESS_KEY) {
+  console.warn("GEMINI_API_KEY is not defined in environment variables.");
+}
 const DEFAULT_MODEL = "google/gemini-2.5-pro";
 
 
