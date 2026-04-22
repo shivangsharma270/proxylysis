@@ -141,10 +141,24 @@ import { Coins } from 'lucide-react';
 
       setIsSavingSession(true);
       try {
+        // Pack all UI state into a restoration context to ensure it's saved 
+        // even if the Sheet doesn't have dedicated columns for these fields.
+        const restorationContext = {
+          mismatch_status: mismatchAnalysisStatus,
+          raw_category: rawCategoryResponse,
+          raw_complaints: rawComplaintsResponse,
+          raw_ratings: rawRatingsResponse,
+          raw_fraud: rawFraudResponse,
+          raw_services: rawServicesResponse
+        };
+
         const payload = {
           gl_id: settings.glId,
           product_name: settings.productName,
-          parameters: settings,
+          parameters: {
+            ...settings,
+            __restoration_context: restorationContext
+          },
           csl_data: {
             raw: rawCslResponse,
             table: cslTableData,
@@ -177,10 +191,13 @@ import { Coins } from 'lucide-react';
       setError(null);
       try {
         const data = await historyService.listSessions();
+        console.log("App.tsx fetchHistory received:", data);
         if (data && Array.isArray(data)) {
           setHistorySessions(data);
+          console.log("State updated with", data.length, "sessions");
         } else {
           setHistorySessions([]);
+          console.log("State set to empty array");
         }
       } catch (err: any) {
         console.error("Fetch History Error:", err);
@@ -213,10 +230,15 @@ import { Coins } from 'lucide-react';
           setMatchmakingData(session.match_data.table || null);
         }
         
-        const results = session.analysis_results || [];
-        setInvolvedGLIDs(Array.isArray(results) ? results.filter((i: any) => i && (i.glId || i.gl_id)).map((i: any) => ({
+        // Handle potential object-as-array wrapping from GAS
+        let results = session.analysis_results || [];
+        if (results && typeof results === 'object' && !Array.isArray(results)) {
+          results = Object.values(results);
+        }
+
+        setInvolvedGLIDs(Array.isArray(results) ? results.filter((i: any) => i && (i.glId || i.gl_id || i.glid)).map((i: any) => ({
           ...i,
-          glId: String(i.glId || i.gl_id || '')
+          glId: String(i.glId || i.gl_id || i.glid || '')
         })) : []);
         
         setScanResults(session.scan_results || { phoneNumbers: [], emails: [], upiIds: [], addresses: [], names: [], invoiceDates: [] });
@@ -224,6 +246,27 @@ import { Coins } from 'lucide-react';
         setSessionOverviews(session.company_overviews || {});
         setAdditionalComments(session.additional_comments || '');
         
+        // Restore extended analysis states from direct properties OR restoration context
+        const context = (session.parameters as any)?.__restoration_context;
+        
+        const mismatchStatus = session.mismatch_status || context?.mismatch_status;
+        if (mismatchStatus) setMismatchAnalysisStatus(mismatchStatus);
+
+        const category = session.raw_category || context?.raw_category;
+        if (category) setRawCategoryResponse(category);
+
+        const complaints = session.raw_complaints || context?.raw_complaints;
+        if (complaints) setRawComplaintsResponse(complaints);
+
+        const ratings = session.raw_ratings || context?.raw_ratings;
+        if (ratings) setRawRatingsResponse(ratings);
+
+        const fraud = session.raw_fraud || context?.raw_fraud;
+        if (fraud) setRawFraudResponse(fraud);
+
+        const services = session.raw_services || context?.raw_services;
+        if (services) setRawServicesResponse(services);
+
         if (editorRef.current) {
           editorRef.current.innerHTML = session.additional_comments || '';
         }
