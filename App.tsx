@@ -186,21 +186,36 @@ import { Coins } from 'lucide-react';
       setIsHistoryLoading(true);
       try {
         const session = await historyService.getSession(sessionId);
+        if (!session) {
+          setError("Session not found or could not be loaded.");
+          return;
+        }
+
+        // Restore all states with safety checks
+        if (session.parameters) setSettings(session.parameters);
         
-        // Restore all states
-        setSettings(session.parameters);
-        setRawCslResponse(session.csl_data.raw);
-        setCslTableData(session.csl_data.table);
-        setCslPagination(session.csl_data.pagination);
+        if (session.csl_data) {
+          setRawCslResponse(session.csl_data.raw || null);
+          setCslTableData(session.csl_data.table || null);
+          setCslPagination(session.csl_data.pagination || { hasMore: false, isFetchingMore: false });
+        }
         
-        setRawMatchResponse(session.match_data.raw);
-        setMatchmakingData(session.match_data.table);
+        if (session.match_data) {
+          setRawMatchResponse(session.match_data.raw || null);
+          setMatchmakingData(session.match_data.table || null);
+        }
         
-        setInvolvedGLIDs(session.analysis_results);
-        setScanResults(session.scan_results);
+        const results = session.analysis_results || [];
+        setInvolvedGLIDs(Array.isArray(results) ? results.filter((i: any) => i && (i.glId || i.gl_id)).map((i: any) => ({
+          ...i,
+          glId: String(i.glId || i.gl_id || '')
+        })) : []);
+        
+        setScanResults(session.scan_results || { phoneNumbers: [], emails: [], upiIds: [], addresses: [], names: [], invoiceDates: [] });
         setMcatData(session.mcat_data || []);
-        setSessionOverviews(session.company_overviews);
+        setSessionOverviews(session.company_overviews || {});
         setAdditionalComments(session.additional_comments || '');
+        
         if (editorRef.current) {
           editorRef.current.innerHTML = session.additional_comments || '';
         }
@@ -208,6 +223,7 @@ import { Coins } from 'lucide-react';
         setIsHistoryModalOpen(false);
         alert("Session restored successfully!");
       } catch (err: any) {
+        console.error("Load Session Error:", err);
         setError("Load Error: " + err.message);
       } finally {
         setIsHistoryLoading(false);
@@ -274,7 +290,7 @@ import { Coins } from 'lucide-react';
 
         // 5. Network Suspect Intelligence
         if (exportOptions.networkSuspect && involvedGLIDs) {
-          const selectedSuspects = involvedGLIDs.filter(s => selectedSuspectGLIDs.includes(s.glId));
+          const selectedSuspects = involvedGLIDs.filter(s => s && selectedSuspectGLIDs.includes(s.glId));
           
           const suspectsData = selectedSuspects.map(s => ({
             'GL ID': s.glId,
@@ -369,7 +385,7 @@ import { Coins } from 'lucide-react';
 
     const cachedCount = useMemo(() => {
       if (!involvedGLIDs) return 0;
-      return involvedGLIDs.filter(item => sessionOverviews[item.glId]?.merp).length;
+      return involvedGLIDs.filter(item => item && item.glId && sessionOverviews[item.glId]?.merp).length;
     }, [involvedGLIDs, sessionOverviews]);
 
     const isGlidSuspect = (glId: string, row: any) => {
@@ -429,13 +445,13 @@ import { Coins } from 'lucide-react';
     const sortedInvolvedGLIDs = useMemo(() => {
       if (!involvedGLIDs) return null;
       
-      let filtered = [...involvedGLIDs];
+      let filtered = [...involvedGLIDs].filter(item => item && item.glId);
       
       if (suspectSearchQuery) {
         const query = suspectSearchQuery.toLowerCase();
         filtered = filtered.filter(item => {
           const glId = String(item.glId || '').toLowerCase();
-          const companyName = String(item.companyName || sessionOverviews[item.glId]?.merp?.glusr_data?.companyname || '').toLowerCase();
+          const companyName = String(item.companyName || (item.glId && sessionOverviews[item.glId]?.merp?.glusr_data?.companyname) || '').toLowerCase();
           const services = Array.isArray(item.servicesAvailed) ? item.servicesAvailed.join(', ').toLowerCase() : String(item.servicesAvailed || '').toLowerCase();
           
           return glId.includes(query) || companyName.includes(query) || services.includes(query);
@@ -608,6 +624,7 @@ import { Coins } from 'lucide-react';
       if (involvedGLIDs && involvedGLIDs.length > 0 && !isSyncing && !isAnalyzingGLIDs) {
         const autoFetch = async () => {
           for (const item of involvedGLIDs) {
+            if (!item || !item.glId) continue;
             const glid = item.glId;
             if (!sessionOverviews[glid]) {
               try {
@@ -1673,7 +1690,7 @@ import { Coins } from 'lucide-react';
                       onClick={() => {
                         setIsExportModalOpen(true);
                         // Default select all GLIDs
-                        setSelectedSuspectGLIDs(involvedGLIDs.map(s => s.glId));
+                        setSelectedSuspectGLIDs(involvedGLIDs.filter(s => s && s.glId).map(s => s.glId));
                       }}
                       className="flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-700 hover:to-indigo-800 text-white px-5 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all transform hover:scale-105 active:scale-95 shadow-lg shadow-indigo-100"
                     >
@@ -2800,7 +2817,7 @@ import { Coins } from 'lucide-react';
                   <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-300">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Select GLIDs to include Overviews</label>
                     <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 max-h-40 overflow-y-auto custom-scrollbar grid grid-cols-2 gap-2">
-                      {involvedGLIDs.map((s) => (
+                      {involvedGLIDs.filter(s => s && s.glId).map((s) => (
                         <label key={s.glId} className="flex items-center gap-3 p-2 hover:bg-white rounded-xl transition-all cursor-pointer border border-transparent hover:border-slate-200">
                           <input 
                             type="checkbox" 
@@ -3337,8 +3354,9 @@ import { Coins } from 'lucide-react';
                   <div className="space-y-3">
                     {historySessions
                       .filter(session => {
+                        if (!session) return false;
                         const searchTerm = historySearchTerm.toLowerCase();
-                        const glId = String(session.gl_id || '').toLowerCase();
+                        const glId = String(session.gl_id || session.id || '').toLowerCase();
                         const productName = String(session.product_name || '').toLowerCase();
                         const id = String(session.id || '').toLowerCase();
                         return glId.includes(searchTerm) || productName.includes(searchTerm) || id.includes(searchTerm);

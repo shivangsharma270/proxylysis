@@ -67,29 +67,49 @@ export const historyService = {
    * List all saved sessions (metadata only).
    */
   listSessions: async (): Promise<HistorySession[]> => {
-    const response = await fetch(`${SCRIPT_URL}?action=list`);
-    if (!response.ok) throw new Error('Failed to fetch history');
-    return await response.json();
+    try {
+      const response = await fetch(`${SCRIPT_URL}?action=list`);
+      if (!response.ok) throw new Error('Failed to fetch history');
+      const data = await response.json();
+      return (Array.isArray(data) ? data : []).filter(s => s && (s.id || s.gl_id));
+    } catch (e) {
+      console.error("List sessions error:", e);
+      return [];
+    }
   },
 
   /**
    * Retrieve a full session snapshot by ID.
    */
-  getSession: async (sessionId: string): Promise<HistorySession> => {
-    const response = await fetch(`${SCRIPT_URL}?action=get&id=${sessionId}`);
-    if (!response.ok) throw new Error(`Failed to fetch session ${sessionId}`);
-    const data = await response.json();
-    
-    // Some GAS scripts return strings that need parsing
-    if (typeof data.parameters === 'string') data.parameters = JSON.parse(data.parameters);
-    if (typeof data.csl_data === 'string') data.csl_data = JSON.parse(data.csl_data);
-    if (typeof data.match_data === 'string') data.match_data = JSON.parse(data.match_data);
-    if (typeof data.analysis_results === 'string') data.analysis_results = JSON.parse(data.analysis_results);
-    if (typeof data.scan_results === 'string') data.scan_results = JSON.parse(data.scan_results);
-    if (typeof data.mcat_data === 'string') data.mcat_data = JSON.parse(data.mcat_data);
-    if (typeof data.company_overviews === 'string') data.company_overviews = JSON.parse(data.company_overviews);
-    
-    return data;
+  getSession: async (sessionId: string): Promise<HistorySession | null> => {
+    try {
+      const response = await fetch(`${SCRIPT_URL}?action=get&id=${sessionId}`);
+      if (!response.ok) throw new Error(`Failed to fetch session ${sessionId}`);
+      const data = await response.json();
+      
+      if (!data || data.error) return null;
+
+      // Some GAS scripts return strings that need parsing
+      const parseIfString = (val: any) => {
+        if (typeof val === 'string' && (val.startsWith('{') || val.startsWith('['))) {
+          try { return JSON.parse(val); } catch { return val; }
+        }
+        return val;
+      };
+
+      data.parameters = parseIfString(data.parameters);
+      data.csl_data = parseIfString(data.csl_data);
+      data.match_data = parseIfString(data.match_data);
+      data.analysis_results = parseIfString(data.analysis_results);
+      data.scan_results = parseIfString(data.scan_results);
+      data.mcat_data = parseIfString(data.mcat_data);
+      data.company_overviews = parseIfString(data.company_overviews);
+      
+      return data;
+    } catch (e) {
+      console.error("Get session error:", e);
+      return null;
+    }
   },
 
   /**
