@@ -50,7 +50,6 @@
     "electron-builder": "^26.8.1",
     "express": "^5.2.1",
     "framer-motion": "^12.34.5",
-    "jszip": "^3.10.1",
     "lucide-react": "^0.576.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

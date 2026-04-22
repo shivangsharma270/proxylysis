@@ -223,12 +223,11 @@ EXTRACT THESE FIELDS:
 3. Emails: List all email addresses.
 4. UPI ID of receiver: Specifically look for UPI IDs (e.g., name@bank, number@upi) that appear to be the payment receiver.
 5. Address: List any physical addresses found.
-6. Invoice Dates: Specifically look for any dates mentioned in the documents (especially invoice dates).
 
 RULES:
 - If a field is not found, return an empty array for that field.
 - Remove duplicates.
-- Return ONLY the JSON object with keys: names, phoneNumbers, emails, upiIds, addresses, invoiceDates.`;
+- Return ONLY the JSON object with keys: names, phoneNumbers, emails, upiIds, addresses.`;
 
   const parts = files.map(file => ({
     inlineData: {
@@ -237,7 +236,7 @@ RULES:
     }
   }));
 
-  parts.push({ text: "Scan these documents and extract Names, Phone Numbers, Emails, UPI IDs, Addresses, and Invoice Dates." } as any);
+  parts.push({ text: "Scan these documents and extract Names, Phone Numbers, Emails, UPI IDs, and Addresses." } as any);
 
   try {
     const text = await callGateway(systemInstruction, parts, true);
