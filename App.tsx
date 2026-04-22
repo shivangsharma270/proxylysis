@@ -1,4 +1,5 @@
   import React, { useState, useEffect, useRef, useMemo } from 'react';
+  import JSZip from 'jszip';
   import * as XLSX from 'xlsx';
   import { Bold, Italic, Underline, List, ListOrdered, Image as ImageIcon, Trash2, Type, Link as LinkIcon, Eraser, ArrowUpDown } from 'lucide-react';
   import { motion, AnimatePresence } from 'framer-motion';
@@ -78,7 +79,8 @@ import { Coins } from 'lucide-react';
       phoneNumbers: string[],
       emails: string[],
       upiIds: string[],
-      addresses: string[]
+      addresses: string[],
+      invoiceDates: string[]
     } | null>(null);
 
     const [backendStatus, setBackendStatus] = useState<{csl: boolean, match: boolean, services: boolean, category: boolean, complaints: boolean, ratings: boolean, fraud: boolean, overview: boolean, summary: boolean, history: boolean}>({
@@ -270,6 +272,7 @@ import { Coins } from 'lucide-react';
             ...scanResults.emails.map(v => ({ Category: 'Email', Value: v })),
             ...scanResults.upiIds.map(v => ({ Category: 'UPI ID', Value: v })),
             ...scanResults.addresses.map(v => ({ Category: 'Address', Value: v })),
+            ...(scanResults.invoiceDates || []).map(v => ({ Category: 'Invoice Date', Value: v })),
           ];
           if (extractedData.length > 0) {
             const ws = XLSX.utils.json_to_sheet(extractedData);
@@ -1263,41 +1266,75 @@ import { Coins } from 'lucide-react';
       }
     };
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
       if (!files) return;
 
-      const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+      const MAX_SIZE = 10 * 1024 * 1024; // Increased to 10MB to accommodate zip contents
       const currentTotalSize = attachedFiles.reduce((sum, f) => sum + f.size, 0);
-      const newFilesList = Array.from(files) as File[];
-      const incomingSize = newFilesList.reduce((sum, f) => sum + f.size, 0);
+      const incomingFiles = Array.from(files) as File[];
+      
+      const newFiles: { data: string, mimeType: string, name: string, size: number }[] = [];
 
+      const processFile = async (file: File) => {
+        if (file.name.toLowerCase().endsWith('.zip')) {
+          try {
+            const zip = new JSZip();
+            const contents = await zip.loadAsync(file);
+            const zipEntries = Object.keys(contents.files).filter(name => !contents.files[name].dir);
+            
+            for (const entryName of zipEntries) {
+              const zipFile = contents.files[entryName];
+              const blob = await zipFile.async('blob');
+              const extractedFile = new File([blob], entryName, { type: blob.type || 'application/octet-stream' });
+              
+              // Only process supported image/pdf types from zip (simplification)
+              if (extractedFile.type.startsWith('image/') || extractedFile.type === 'application/pdf') {
+                await readFile(extractedFile);
+              }
+            }
+          } catch (err) {
+            console.error("Error unzipping file:", err);
+            setError(`Failed to process zip file: ${file.name}`);
+          }
+        } else {
+          await readFile(file);
+        }
+      };
+
+      const readFile = (file: File): Promise<void> => {
+        return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            if (event.target?.result) {
+              newFiles.push({
+                data: event.target.result as string,
+                mimeType: file.type || 'application/octet-stream',
+                name: file.name,
+                size: file.size
+              });
+            }
+            resolve();
+          };
+          reader.onerror = () => resolve();
+          reader.readAsDataURL(file);
+        });
+      };
+
+      // Process all selected files
+      await Promise.all(incomingFiles.map(f => processFile(f)));
+
+      const incomingSize = newFiles.reduce((sum, f) => sum + f.size, 0);
       if (currentTotalSize + incomingSize > MAX_SIZE) {
-        setError(`Total file size exceeds 5MB limit. (Current: ${(currentTotalSize / 1024 / 1024).toFixed(2)}MB, New: ${(incomingSize / 1024 / 1024).toFixed(2)}MB)`);
-        // Reset input
+        setError(`Total file size exceeds 10MB limit. (Current: ${(currentTotalSize / 1024 / 1024).toFixed(2)}MB, New: ${(incomingSize / 1024 / 1024).toFixed(2)}MB)`);
         e.target.value = '';
         return;
       }
 
-      const newFiles: { data: string, mimeType: string, name: string, size: number }[] = [];
-      newFilesList.forEach((file: File) => {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          if (event.target?.result) {
-            newFiles.push({
-              data: event.target.result as string,
-              mimeType: file.type,
-              name: file.name,
-              size: file.size
-            });
-            if (newFiles.length === newFilesList.length) {
-              setAttachedFiles(prev => [...prev, ...newFiles]);
-            }
-          }
-        };
-        reader.readAsDataURL(file);
-      });
-      // Reset input so same file can be selected again if removed
+      if (newFiles.length > 0) {
+        setAttachedFiles(prev => [...prev, ...newFiles]);
+      }
+      
       e.target.value = '';
     };
 
@@ -1919,6 +1956,7 @@ import { Coins } from 'lucide-react';
                       { label: 'Emails', icon: 'M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z', data: scanResults.emails, color: 'text-indigo-500', bg: 'bg-indigo-50' },
                       { label: 'UPI ID of Receiver', icon: 'M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z', data: scanResults.upiIds, color: 'text-violet-500', bg: 'bg-violet-50' },
                       { label: 'Address', icon: 'M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z M15 11a3 3 0 11-6 0 3 3 0 016 0z', data: scanResults.addresses, color: 'text-rose-500', bg: 'bg-rose-50' },
+                      { label: 'Invoice Dates', icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z', data: scanResults.invoiceDates || [], color: 'text-amber-500', bg: 'bg-amber-50' },
                     ].map((group, idx) => (
                       <div key={idx} className="space-y-3">
                         <div className="flex items-center gap-2">
