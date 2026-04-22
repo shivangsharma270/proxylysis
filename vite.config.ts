@@ -26,7 +26,6 @@ export default defineConfig(({ mode }) => {
         '/api/5006': { target: 'http://127.0.0.1:5006', changeOrigin: true, rewrite: (path) => path.replace(/^\/api\/5006/, '') },
         '/api/5007': { target: 'http://127.0.0.1:5007', changeOrigin: true, rewrite: (path) => path.replace(/^\/api\/5007/, '') },
         '/api/5008': { target: 'http://127.0.0.1:5008', changeOrigin: true, rewrite: (path) => path.replace(/^\/api\/5008/, '') },
-        '/api/5009': { target: 'http://127.0.0.1:5009', changeOrigin: true, rewrite: (path) => path.replace(/^\/api\/5009/, '') },
         '/api/5010': { target: 'http://127.0.0.1:5010', changeOrigin: true, rewrite: (path) => path.replace(/^\/api\/5010/, '') },
       }
     }

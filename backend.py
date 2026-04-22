@@ -51,8 +51,6 @@ def init_db():
         cur.execute("""CREATE TABLE IF NOT EXISTS lms_fraud_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, gl_id TEXT, fraud_type TEXT, severity TEXT, description TEXT, detected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
         # Top Bar Summary
         cur.execute("""CREATE TABLE IF NOT EXISTS top_bar_summary_data (id INTEGER PRIMARY KEY AUTOINCREMENT, gl_id TEXT, bl_lm INTEGER DEFAULT 0, qry_reply_lm INTEGER DEFAULT 0, total_leads INTEGER DEFAULT 0, active_products INTEGER DEFAULT 0)""")
-        # Analysis Sessions
-        cur.execute("""CREATE TABLE IF NOT EXISTS analysis_sessions (id TEXT PRIMARY KEY, gl_id TEXT NOT NULL, product_name TEXT, parameters TEXT, csl_data TEXT, match_data TEXT, analysis_results TEXT, scan_results TEXT, company_overviews TEXT, additional_comments TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""")
         # Dim Glusr Usr
         cur.execute("""CREATE TABLE IF NOT EXISTS dim_glusr_usr (glusr_usr_id TEXT PRIMARY KEY, companyname TEXT, contactperson TEXT, city TEXT, state TEXT, address TEXT, email TEXT)""")
         # Approved Products
@@ -264,53 +262,6 @@ def ai_scan():
 def text_response(text):
     try: return jsonify(json.loads(text))
     except: return jsonify({"content": text})
-
-# --- HISTORY ROUTES ---
-@app.route('/save_session', methods=['POST'])
-@app.route('/history/save_session', methods=['POST'])
-def save_session():
-    data = request.json
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-        current_date = datetime.now().strftime("%Y-%m-%d")
-        gl_id = data.get('gl_id', 'unknown')
-        custom_id = f"{gl_id}-{current_date}"
-        query = "INSERT OR REPLACE INTO analysis_sessions (id, gl_id, product_name, parameters, csl_data, match_data, analysis_results, scan_results, company_overviews, additional_comments) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-        cur.execute(query, (custom_id, gl_id, data.get('product_name'), json.dumps(data.get('parameters', {})), json.dumps(data.get('csl_data', {})), json.dumps(data.get('match_data', {})), json.dumps(data.get('analysis_results', [])), json.dumps(data.get('scan_results', {})), json.dumps(data.get('company_overviews', {})), data.get('additional_comments', '')))
-        conn.commit()
-        return jsonify({"message": "Session saved", "id": custom_id})
-    except Exception as e: return jsonify({"error": str(e)}), 500
-    finally: conn.close()
-
-@app.route('/list_sessions', methods=['GET'])
-@app.route('/history/list_sessions', methods=['GET'])
-def list_sessions():
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-        cur.execute("SELECT id, gl_id, product_name, created_at FROM analysis_sessions ORDER BY created_at DESC")
-        sessions = [dict(row) for row in cur.fetchall()]
-        return jsonify(sessions)
-    except Exception as e: return jsonify({"error": str(e)}), 500
-    finally: conn.close()
-
-@app.route('/get_session/<session_id>', methods=['GET'])
-@app.route('/history/get_session/<session_id>', methods=['GET'])
-def get_session(session_id):
-    conn = get_db_connection()
-    try:
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM analysis_sessions WHERE id = ?", (session_id,))
-        row = cur.fetchone()
-        if not row: return jsonify({"error": "Not found"}), 404
-        session = dict(row)
-        for key in ['parameters', 'csl_data', 'match_data', 'analysis_results', 'scan_results', 'company_overviews']:
-            try: session[key] = json.loads(session[key])
-            except: pass
-        return jsonify(session)
-    except Exception as e: return jsonify({"error": str(e)}), 500
-    finally: conn.close()
 
 # --- REDSHIFT ROUTES ---
 @app.route('/complaints', methods=['POST'])
