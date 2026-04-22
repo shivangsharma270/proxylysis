@@ -3336,11 +3336,13 @@ import { Coins } from 'lucide-react';
                 ) : historySessions.length > 0 ? (
                   <div className="space-y-3">
                     {historySessions
-                      .filter(session => 
-                        session.gl_id.toLowerCase().includes(historySearchTerm.toLowerCase()) || 
-                        (session.product_name && session.product_name.toLowerCase().includes(historySearchTerm.toLowerCase())) ||
-                        session.id.toLowerCase().includes(historySearchTerm.toLowerCase())
-                      )
+                      .filter(session => {
+                        const searchTerm = historySearchTerm.toLowerCase();
+                        const glId = String(session.gl_id || '').toLowerCase();
+                        const productName = String(session.product_name || '').toLowerCase();
+                        const id = String(session.id || '').toLowerCase();
+                        return glId.includes(searchTerm) || productName.includes(searchTerm) || id.includes(searchTerm);
+                      })
                       .map((session) => (
                       <div key={session.id} className="group flex items-center justify-between p-5 bg-slate-50 border border-slate-200 rounded-3xl hover:border-indigo-300 hover:bg-indigo-50/30 transition-all">
                         <div className="flex flex-col gap-1">

@@ -34,43 +34,28 @@ export const historyService = {
       action: 'save',
       id: customId,
       ...data,
-      // Ensure complex objects are stringified if the script expects separate columns
-      // or just send the whole thing as one JSON blob if preferred.
-      // Standard practice for simple GAS scripts is sending action and data.
     };
 
-    const response = await fetch(SCRIPT_URL, {
-      method: 'POST',
-      mode: 'no-cors', // GAS web apps often require no-cors or handle CORS via redirect
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
-
-    // Note: With 'no-cors', we can't read the response body.
-    // However, for GAS Web Apps, 'no-cors' is often the only way to avoid preflight issues 
-    // if the script isn't perfectly configured for CORS.
-    // If the user's script supports CORS, we should use 'cors'.
-    
-    // For now, let's try 'cors' first.
     try {
+        // Use text/plain to avoid preflight OPTIONS request
         const corsResponse = await fetch(SCRIPT_URL, {
             method: 'POST',
+            mode: 'cors',
             headers: {
-                'Content-Type': 'application/json',
+                'Content-Type': 'text/plain;charset=utf-8',
             },
             body: JSON.stringify(payload),
         });
         if (!corsResponse.ok) throw new Error('CORS request failed');
-        return await corsResponse.json();
+        const result = await corsResponse.json();
+        return result;
     } catch (e) {
-        console.warn("CORS failed, attempting no-cors save. Note: Response cannot be verified.");
+        console.warn("Standard fetch failed or returned non-JSON, attempting no-cors save as fallback.");
         await fetch(SCRIPT_URL, {
             method: 'POST',
             mode: 'no-cors',
             headers: {
-                'Content-Type': 'application/json',
+                'Content-Type': 'text/plain;charset=utf-8',
             },
             body: JSON.stringify(payload),
         });
