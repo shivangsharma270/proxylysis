@@ -84,7 +84,7 @@ import { Coins } from 'lucide-react';
       invoiceDates: string[]
     } | null>(null);
 
-    const [backendStatus, setBackendStatus] = useState<{csl: boolean, match: boolean, services: boolean, category: boolean, complaints: boolean, ratings: boolean, fraud: boolean, overview: boolean, summary: boolean, history: boolean}>({
+    const [backendStatus, setBackendStatus] = useState<{csl: boolean, match: boolean, services: boolean, category: boolean, complaints: boolean, ratings: boolean, fraud: boolean, overview: boolean, summary: boolean, mcat: boolean, history: boolean}>({
       csl: false, 
       match: false, 
       services: false,
@@ -94,6 +94,7 @@ import { Coins } from 'lucide-react';
       fraud: false,
       overview: false,
       summary: false,
+      mcat: false,
       history: false
     });
     const [error, setError] = useState<string | null>(null);
@@ -628,6 +629,16 @@ import { Coins } from 'lucide-react';
           overviewOk = overviewRes.ok;
         } catch {}
 
+        let mcatOk = false;
+        try {
+          const mcatRes = await fetch(`${BRIDGE_HOST}:5010/mcat`, { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ ping: true }) 
+          });
+          mcatOk = mcatRes.ok;
+        } catch {}
+
         try {
           const summaryRes = await fetch(`${BRIDGE_HOST}:5008/summary`, { 
             method: 'POST', 
@@ -647,6 +658,7 @@ import { Coins } from 'lucide-react';
           fraud: fraudOk, 
           overview: overviewOk,
           summary: summaryOk,
+          mcat: mcatOk,
           history: true
         });
       };
@@ -698,7 +710,7 @@ import { Coins } from 'lucide-react';
                   fetch(`${BRIDGE_HOST}:5010/mcat`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ glId: glid })
+                    body: JSON.stringify({ glid: glid })
                   })
                 ]);
 
@@ -909,7 +921,7 @@ import { Coins } from 'lucide-react';
       fetch(`${BRIDGE_HOST}:5010/mcat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ glId: glid })
+        body: JSON.stringify({ glid: glid })
       })
       .then(res => res.json())
       .then(mcatRes => {
@@ -1040,7 +1052,7 @@ import { Coins } from 'lucide-react';
               const mcatRes = await fetch(`${BRIDGE_HOST}:5010/mcat`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ glId })
+                body: JSON.stringify({ glid: glId })
               });
               if (mcatRes.ok) {
                 const d = await mcatRes.json();
@@ -1634,7 +1646,7 @@ import { Coins } from 'lucide-react';
             const mcatRes = await fetch(`${BRIDGE_HOST}:5010/mcat`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ glId: item.glId })
+              body: JSON.stringify({ glid: item.glId })
             }).then(r => r.ok ? r.json() : null);
 
             const bsCompRes = await fetch(`${BRIDGE_HOST}:5004/bs_complaints`, {
@@ -1742,6 +1754,7 @@ import { Coins } from 'lucide-react';
                       { id: 'FRAUD', port: 5006, status: backendStatus.fraud, color: 'bg-pink-500' },
                       { id: 'OVERVIEW', port: 5007, status: backendStatus.overview, color: 'bg-cyan-500' },
                       { id: 'SUMMARY', port: 5008, status: backendStatus.summary, color: 'bg-teal-500' },
+                      { id: 'MCAT', port: 5010, status: backendStatus.mcat, color: 'bg-amber-600' },
                       { id: 'SHEETS', port: 'Cloud', status: true, color: 'bg-green-600' },
                     ].map((svc) => (
                       <div key={svc.id} className="flex items-center justify-between group/item">
