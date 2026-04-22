@@ -1611,6 +1611,60 @@ import { Coins } from 'lucide-react';
             } else { supplierRating = 0; }
           } catch { supplierRating = 0; }
 
+          // [ADDED] Fetch Company Overview Background (Silent)
+          try {
+            const overviewRes = await fetch(`${BRIDGE_HOST}:5007/overview`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ glid: item.glId, AK: settings.authToken })
+            }).then(r => r.ok ? r.json() : null);
+            
+            const redshiftRes = await fetch(`${BRIDGE_HOST}:5004/redshift_overview`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ glId: item.glId })
+            }).then(r => r.ok ? r.json() : null);
+            
+            const summaryRes = await fetch(`${BRIDGE_HOST}:5008/summary`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ glid: item.glId })
+            }).then(r => r.ok ? r.json() : null);
+
+            const mcatRes = await fetch(`${BRIDGE_HOST}:5010/mcat`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ glId: item.glId })
+            }).then(r => r.ok ? r.json() : null);
+
+            const bsCompRes = await fetch(`${BRIDGE_HOST}:5004/bs_complaints`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ glId: item.glId })
+            }).then(r => r.ok ? r.json() : null);
+
+            if (overviewRes) {
+              const merpData = overviewRes.data || null;
+              setSessionOverviews(prev => ({
+                ...prev,
+                [item.glId]: {
+                  merp: merpData,
+                  redshift: redshiftRes || null,
+                  summary: summaryRes?.parsed_response?.top_bar_data?.[0] || null,
+                  mcat: mcatRes?.mcat_data || [],
+                  latlong_status: bsCompRes?.latlong_status || 'Not Verified',
+                  address_status: bsCompRes?.address_status || 'Not Verified'
+                }
+              }));
+              
+              if (merpData?.glusr_data?.companyname) {
+                item.companyName = merpData.glusr_data.companyname;
+              }
+            }
+          } catch (covErr) {
+            console.error(`Silent Overview Error for ${item.glId}:`, covErr);
+          }
+
           detailedSuspects.push({
             ...item,
             ...servicesData,
