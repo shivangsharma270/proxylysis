@@ -1,7 +1,7 @@
 
 
 const GATEWAY_URL = "https://imllm.intermesh.net/v1/chat/completions";
-const ACCESS_KEY = "sk-jcg6lcVymtoMKKktWrF_HQ";
+const ACCESS_KEY = "sk-tjw8L1Ya0ERxH55JuSQQQQ";
 const DEFAULT_MODEL = "google/gemini-2.5-pro";
 
 

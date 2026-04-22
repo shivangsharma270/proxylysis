@@ -55,10 +55,12 @@ def init_db():
         if conn:
             conn.close()
 
-@app.route('/save_session', methods=['POST'])
+@app.route('/save_session', methods=['POST', 'OPTIONS'])
 def save_session():
+    if request.method == 'OPTIONS':
+        return jsonify({"status": "ok"}), 200
     """Save a complete analysis session snapshot."""
-    data = request.json
+    data = request.json or {}
     if not data:
         return jsonify({"error": "No data provided"}), 400
     

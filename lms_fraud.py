@@ -44,11 +44,19 @@ def init_db():
 
 init_db()
 
-@app.route('/fraud', methods=['POST'])
+@app.route('/fraud', methods=['POST', 'OPTIONS'])
 def get_fraud_logs():
+    if request.method == 'OPTIONS':
+        return jsonify({"status": "ok"}), 200
+
     conn = None
     try:
-        data = request.json
+        data = request.json or {}
+        
+        # Handle ping
+        if data.get('ping'):
+            return jsonify({"status": "online"}), 200
+
         gl_id = data.get('glId')
         
         conn = get_db_connection()

@@ -18,11 +18,19 @@ def get_db_connection():
         print(f"[!] CompanyOverview Bridge Connection Error: {str(e)}")
         return None
 
-@app.route('/overview', methods=['POST'])
+@app.route('/overview', methods=['POST', 'OPTIONS'])
 def get_overview():
+    if request.method == 'OPTIONS':
+        return jsonify({"status": "ok"}), 200
+
     conn = None
     try:
-        data = request.json
+        data = request.json or {}
+        
+        # Handle ping
+        if data.get('ping'):
+            return jsonify({"status": "online"}), 200
+
         gl_id = data.get('glId')
         
         conn = get_db_connection()

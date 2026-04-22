@@ -27,9 +27,17 @@ def get_redshift_connection():
         print(f"[!] Redshift Connection Error: {str(e)}")
         return None
 
-@app.route('/mcat', methods=['POST'])
+@app.route('/mcat', methods=['POST', 'OPTIONS'])
 def fetch_mcat():
-    data = request.json
+    if request.method == 'OPTIONS':
+        return jsonify({"status": "ok"}), 200
+
+    data = request.json or {}
+    
+    # Handle ping
+    if data.get('ping'):
+        return jsonify({"status": "online"}), 200
+
     gl_id = data.get('glId')
     
     if not gl_id:

@@ -17,8 +17,10 @@ DB_CONFIG = {
     'sslmode': 'require'  # Added for Redshift security
 }
 
-@app.route('/complaints', methods=['POST'])
+@app.route('/complaints', methods=['POST', 'OPTIONS'])
 def get_complaints():
+    if request.method == 'OPTIONS':
+        return jsonify({"status": "ok"}), 200
     conn = None
     try:
         data = request.json or {}
@@ -44,8 +46,10 @@ def get_complaints():
         if conn: conn.close()
         return jsonify({"error": str(e)}), 500
 
-@app.route('/redshift_overview', methods=['POST'])
+@app.route('/redshift_overview', methods=['POST', 'OPTIONS'])
 def get_redshift_overview():
+    if request.method == 'OPTIONS':
+        return jsonify({"status": "ok"}), 200
     print("\n" + "="*50)
     print("--- REDSHIFT OVERVIEW REQUEST RECEIVED ---")
     conn = None
@@ -208,8 +212,10 @@ def get_redshift_overview():
         if conn: conn.close()
         return jsonify({"error": str(e)}), 500
 
-@app.route('/bs_complaints', methods=['POST'])
+@app.route('/bs_complaints', methods=['POST', 'OPTIONS'])
 def get_bs_complaints():
+    if request.method == 'OPTIONS':
+        return jsonify({"status": "ok"}), 200
     conn = None
     try:
         data = request.json or {}

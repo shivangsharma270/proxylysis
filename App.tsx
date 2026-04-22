@@ -14,7 +14,7 @@ import { Coins } from 'lucide-react';
       startTime: '00:00:00',
       endDate: new Date().toISOString().split('T')[0],
       endTime: '23:59:59',
-      authToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMTM4MTYiLCJmdW4iOiIxIiwiZXhwIjoxNzcwNzA0NjYxLCJpYXQiOjE3NzA2MTgyNjEsImlzcyI6IkVMUExPWUVFIn0.8r8k2RdDH52WCWF9qee8a481EJFbtTNNeMmb3_3FjtI',
+      authToken: '',
       productName: '',
       disputedAmount: '',
       document: null,
@@ -120,7 +120,6 @@ import { Coins } from 'lucide-react';
     const [isHistoryLoading, setIsHistoryLoading] = useState(false);
     const [isSavingSession, setIsSavingSession] = useState(false);
     const [sessionOverviews, setSessionOverviews] = useState<Record<string, any>>({});
-    const fetchingRef = useRef<Set<string>>(new Set());
     const [additionalComments, setAdditionalComments] = useState('');
     const editorRef = useRef<HTMLDivElement>(null);
 
@@ -626,101 +625,76 @@ import { Coins } from 'lucide-react';
     }, []);
 
     useEffect(() => {
-      let isCancelled = false;
       if (involvedGLIDs && involvedGLIDs.length > 0 && !isSyncing && !isAnalyzingGLIDs) {
-        const fetchBatch = async (items: any[]) => {
-          if (isCancelled) return;
-          await Promise.all(items.map(async (item) => {
-            if (isCancelled) return;
+        const autoFetch = async () => {
+          for (const item of involvedGLIDs) {
             const glid = item.glId;
-            
-            // Skip if already in cache or currently fetching
-            if (sessionOverviews[glid] || fetchingRef.current.has(glid)) return;
-            
-            fetchingRef.current.add(glid);
-            console.log(`[*] Auto-fetching background data for ${glid}...`);
+            if (!sessionOverviews[glid]) {
+              try {
+                const [merpRes, rsRes, sumRes, mcatRes] = await Promise.all([
+                  fetch(`${BRIDGE_HOST}:5007/overview`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ glid, AK: settings.authToken })
+                  }),
+                  fetch(`${BRIDGE_HOST}:5004/redshift_overview`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ glId: glid })
+                  }),
+                  fetch(`${BRIDGE_HOST}:5008/summary`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ glid })
+                  }),
+                  fetch(`${BRIDGE_HOST}:5010/mcat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ glId: glid })
+                  })
+                ]);
 
-            try {
-              const [merpRes, rsRes, sumRes, mcatRes] = await Promise.all([
-                fetch(`${BRIDGE_HOST}:5007/overview`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ glId: glid, AK: settings.authToken })
-                }),
-                fetch(`${BRIDGE_HOST}:5004/redshift_overview`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ glId: glid })
-                }),
-                fetch(`${BRIDGE_HOST}:5008/summary`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ glId: glid })
-                }),
-                fetch(`${BRIDGE_HOST}:5010/mcat`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ glId: glid })
-                })
-              ]);
+                let merpData = null;
+                let rsData = null;
+                let sumData = null;
+                let mcatDataBatch = null;
 
-              if (isCancelled) return;
-
-              let merpData = null;
-              let rsData = null;
-              let sumData = null;
-              let mcatDataBatch = null;
-
-              if (merpRes.ok) {
-                const d = await merpRes.json();
-                merpData = d.data;
-                if (merpData?.glusr_data) {
-                  searchOnlinePresence(
-                    merpData.glusr_data.companyname,
-                    `${merpData.glusr_data.address}, ${merpData.glusr_data.city}`,
-                    merpData?.gst_data?.[0]?.gst || '',
-                    merpData?.client_contact_numbers?.[0]?.value || ''
-                  ).then(presence => {
-                    if (!isCancelled) setOnlinePresenceCache(prev => ({ ...prev, [glid]: presence }));
-                  }).catch(() => {});
+                if (merpRes.ok) {
+                  const d = await merpRes.json();
+                  merpData = d.data;
+                  if (merpData?.glusr_data) {
+                    searchOnlinePresence(
+                      merpData.glusr_data.companyname,
+                      `${merpData.glusr_data.address}, ${merpData.glusr_data.city}`,
+                      merpData?.gst_data?.[0]?.gst || '',
+                      merpData?.client_contact_numbers?.[0]?.value || ''
+                    ).then(presence => {
+                      setOnlinePresenceCache(prev => ({ ...prev, [glid]: presence }));
+                    }).catch(() => {});
+                  }
                 }
-              }
-              if (rsRes.ok) rsData = await rsRes.json();
-              if (sumRes.ok) {
-                const d = await sumRes.json();
-                sumData = d?.parsed_response?.top_bar_data?.[0] || null;
-              }
-              if (mcatRes.ok) {
-                const d = await mcatRes.json();
-                mcatDataBatch = d.mcat_data || [];
-              }
+                if (rsRes.ok) rsData = await rsRes.json();
+                if (sumRes.ok) {
+                  const d = await sumRes.json();
+                  sumData = d?.parsed_response?.top_bar_data?.[0] || null;
+                }
+                if (mcatRes.ok) {
+                  const d = await mcatRes.json();
+                  mcatDataBatch = d.mcat_data || [];
+                }
 
-              if (!isCancelled) {
                 setSessionOverviews(prev => ({
                   ...prev,
                   [glid]: { merp: merpData, redshift: rsData, summary: sumData, mcat: mcatDataBatch }
                 }));
+              } catch (e) {
+                console.error(`Auto-fetch failed for ${glid}`, e);
               }
-            } catch (e) {
-              console.error(`Auto-fetch failed for ${glid}`, e);
-            } finally {
-              fetchingRef.current.delete(glid);
             }
-          }));
-        };
-
-        const autoFetchAll = async () => {
-          const batchSize = 5;
-          for (let i = 0; i < involvedGLIDs.length; i += batchSize) {
-            if (isCancelled) break;
-            const batch = involvedGLIDs.slice(i, i + batchSize);
-            await fetchBatch(batch);
           }
         };
-
-        autoFetchAll();
+        autoFetch();
       }
-      return () => { isCancelled = true; };
     }, [involvedGLIDs, isSyncing, isAnalyzingGLIDs]);
 
     const toggleCslColumn = (param: string) => {
@@ -786,7 +760,7 @@ import { Coins } from 'lucide-react';
       fetch(`${BRIDGE_HOST}:5007/overview`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ glId: glid, AK: settings.authToken })
+        body: JSON.stringify({ glid, AK: settings.authToken })
       })
       .then(res => res.json())
       .then(async (overviewData) => {
@@ -861,7 +835,7 @@ import { Coins } from 'lucide-react';
       fetch(`${BRIDGE_HOST}:5008/summary`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ glId: glid })
+        body: JSON.stringify({ glid })
       })
       .then(res => res.json())
       .then(summaryData => {
@@ -1081,7 +1055,7 @@ import { Coins } from 'lucide-react';
             const srvRes = await fetch(`${BRIDGE_HOST}:5002/services`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ glId: item.glId, AK: settings.authToken })
+              body: JSON.stringify({ glid: item.glId, AK: settings.authToken })
             });
             if (srvRes.ok) {
               const srvData = await srvRes.json();
@@ -1498,7 +1472,7 @@ import { Coins } from 'lucide-react';
             const srvRes = await fetch(`${BRIDGE_HOST}:5002/services`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ glId: item.glId, AK: settings.authToken })
+              body: JSON.stringify({ glid: item.glId, AK: settings.authToken })
             });
             if (srvRes.ok) {
               const srvData = await srvRes.json();
@@ -1739,7 +1713,7 @@ import { Coins } from 'lucide-react';
                   </div>
                   <div className="space-y-2">
                     <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Auth Token (AK)</label>
-                    <input type="password" value={settings.authToken} onChange={e => setSettings({...settings, authToken: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 text-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all font-bold text-slate-700" />
+                    <input type="text" placeholder="Enter Auth Token (AK)" value={settings.authToken} onChange={e => setSettings({...settings, authToken: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 text-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all font-bold text-slate-700" />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
