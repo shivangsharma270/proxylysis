@@ -2,4 +2,3 @@ flask
 flask-cors
 requests
 psycopg2-binary
-mysql-connector-python
