@@ -5,6 +5,7 @@
   import { motion, AnimatePresence } from 'framer-motion';
   import { AgentSettings } from './types.ts';
   import { identifyInvolvedGLIDs, analyzeProductMismatch, searchOnlinePresence, scanDocumentsWithGemini } from './services/geminiService.ts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 import { historyService } from './services/historyService.ts';
 import TokenAnalysis from './components/TokenAnalysis.tsx';
 import { Coins } from 'lucide-react';
@@ -104,7 +105,48 @@ import { Coins } from 'lucide-react';
     const [authEmail, setAuthEmail] = useState(() => {
       return localStorage.getItem('proxy_auth_email') || '';
     });
+    const [isAdmin, setIsAdmin] = useState(() => {
+      return localStorage.getItem('proxy_admin_status') === 'true';
+    });
     const [loginError, setLoginError] = useState('');
+    const [showAdminLogin, setShowAdminLogin] = useState(false);
+    const [adminStartDate, setAdminStartDate] = useState(() => {
+      const d = new Date();
+      d.setDate(d.getDate() - 30); // Default to last 30 days
+      return d.toISOString().split('T')[0];
+    });
+    const [adminEndDate, setAdminEndDate] = useState(new Date().toISOString().split('T')[0]);
+    
+    // History Management State
+    const [historySessions, setHistorySessions] = useState<any[]>([]);
+
+    // Memoized admin filters and chart data
+    const filteredAdminSessions = useMemo(() => {
+      return historySessions.filter(s => {
+        if (!s.created_at) return false;
+        const date = new Date(s.created_at).toISOString().split('T')[0];
+        return date >= adminStartDate && date <= adminEndDate;
+      });
+    }, [historySessions, adminStartDate, adminEndDate]);
+
+    const chartData = useMemo(() => {
+      const counts = filteredAdminSessions.reduce((acc: any, s: any) => {
+        const email = s.saved_by || 'Unknown';
+        acc[email] = (acc[email] || 0) + 1;
+        return acc;
+      }, {});
+      return Object.entries(counts)
+        .map(([name, count]) => ({ 
+          name: name.split('@')[0].replace('.', ' ').toUpperCase(), 
+          count: count as number
+        }))
+        .sort((a: any, b: any) => b.count - a.count);
+    }, [filteredAdminSessions]);
+
+    const ADMIN_CREDENTIALS = {
+      email: 'proxylysis@indiamart.com',
+      password: 'indiamart@123'
+    };
 
     const hardcodedUsers = {
       'rahul.singh@indiamart.com': '25672',
@@ -119,11 +161,28 @@ import { Coins } from 'lucide-react';
       const pass = formData.get('password') as string;
       const emailLower = email.toLowerCase().trim();
       
+      if (showAdminLogin) {
+        if (emailLower === ADMIN_CREDENTIALS.email && pass === ADMIN_CREDENTIALS.password) {
+          setIsAuthenticated(true);
+          setIsAdmin(true);
+          setAuthEmail(emailLower);
+          localStorage.setItem('proxy_auth_status', 'true');
+          localStorage.setItem('proxy_auth_email', emailLower);
+          localStorage.setItem('proxy_admin_status', 'true');
+          setLoginError('');
+        } else {
+          setLoginError('Invalid Admin Credentials');
+        }
+        return;
+      }
+
       if (hardcodedUsers[emailLower as keyof typeof hardcodedUsers] === pass) {
         setIsAuthenticated(true);
+        setIsAdmin(false);
         setAuthEmail(emailLower);
         localStorage.setItem('proxy_auth_status', 'true');
         localStorage.setItem('proxy_auth_email', emailLower);
+        localStorage.setItem('proxy_admin_status', 'false');
         setLoginError('');
       } else {
         setLoginError('Invalid Email or Password');
@@ -146,10 +205,9 @@ import { Coins } from 'lucide-react';
     });
     const [selectedSuspectGLIDs, setSelectedSuspectGLIDs] = useState<string[]>([]);
     
-    // History Management State
     const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+    const [isAdminDashboardOpen, setIsAdminDashboardOpen] = useState(false);
     const [isTokenAnalysisOpen, setIsTokenAnalysisOpen] = useState(false);
-    const [historySessions, setHistorySessions] = useState<any[]>([]);
     const [historySearchTerm, setHistorySearchTerm] = useState('');
     const [isHistoryLoading, setIsHistoryLoading] = useState(false);
     const [isSavingSession, setIsSavingSession] = useState(false);
@@ -1758,17 +1816,23 @@ import { Coins } from 'lucide-react';
                 <motion.div 
                   whileHover={{ rotate: 0, scale: 1.05 }}
                   initial={{ rotate: 3 }}
-                  className="bg-gradient-to-br from-indigo-600 to-violet-700 h-20 w-20 rounded-3xl flex items-center justify-center text-white shadow-2xl shadow-indigo-200 transition-all duration-500 mb-8"
+                  className={`bg-gradient-to-br ${showAdminLogin ? 'from-slate-800 to-black' : 'from-indigo-600 to-violet-700'} h-20 w-20 rounded-3xl flex items-center justify-center text-white shadow-2xl shadow-indigo-200 transition-all duration-500 mb-8`}
                 >
                   <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
                 </motion.div>
-                <h1 className="text-3xl font-black tracking-tight text-slate-900 uppercase">Proxylysis Login</h1>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] mt-3">Proxylysis Intel Network</p>
+                <h1 className="text-3xl font-black tracking-tight text-slate-900 uppercase">
+                  {showAdminLogin ? 'Admin Nexus' : 'Proxylysis Login'}
+                </h1>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] mt-3">
+                  {showAdminLogin ? 'Central Intelligence Control' : 'Proxylysis Intel Network'}
+                </p>
               </div>
 
               <form onSubmit={handleLogin} className="space-y-6">
                 <div className="space-y-2.5">
-                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Official Email</label>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                    {showAdminLogin ? 'Admin Email' : 'Official Email'}
+                  </label>
                   <div className="relative">
                     <div className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.206"></path></svg>
@@ -1815,11 +1879,35 @@ import { Coins } from 'lucide-react';
 
                 <button 
                   type="submit"
-                  className="w-full py-5 bg-slate-900 hover:bg-black text-white rounded-[1.5rem] font-black text-xs uppercase tracking-[0.3em] shadow-[0_20px_40px_-10px_rgba(15,23,42,0.3)] transform transition-all active:scale-[0.98] hover:-translate-y-0.5"
+                  className={`w-full py-5 ${showAdminLogin ? 'bg-slate-900' : 'bg-indigo-600'} hover:bg-black text-white rounded-[1.5rem] font-black text-xs uppercase tracking-[0.3em] shadow-[0_20px_40px_-10px_rgba(15,23,42,0.3)] transform transition-all active:scale-[0.98] hover:-translate-y-0.5`}
                 >
-                  Verify Identity
+                  {showAdminLogin ? 'Access Control' : 'Verify Identity'}
                 </button>
               </form>
+
+              {!showAdminLogin ? (
+                <button 
+                  onClick={() => {
+                    setShowAdminLogin(true);
+                    setLoginError('');
+                  }}
+                  className="w-full mt-6 py-4 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-[1.5rem] font-black text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 00-1.066-2.573c-.94-1.543.826-3.31 2.37-2.37a1.724 1.724 0 002.572-1.065z"></path><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                  Admin Panel
+                </button>
+              ) : (
+                <button 
+                  onClick={() => {
+                    setShowAdminLogin(false);
+                    setLoginError('');
+                  }}
+                  className="w-full mt-6 py-4 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-[1.5rem] font-black text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                  Back to Associate Login
+                </button>
+              )}
             </div>
             <div className="bg-slate-50/80 p-8 border-t border-slate-100 flex flex-col items-center gap-2">
               <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.4em]">Proprietary Audit Technology</span>
@@ -1846,6 +1934,18 @@ import { Coins } from 'lucide-react';
             </div>
 
             <div className="flex items-center gap-6">
+              {isAdmin && (
+                <button 
+                  onClick={() => setIsAdminDashboardOpen(true)}
+                  className="hidden lg:flex items-center gap-3 px-6 py-2.5 bg-slate-900 border border-slate-800 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-black transition-all shadow-xl shadow-slate-200 group"
+                >
+                  <div className="p-1 bg-white/10 rounded-md group-hover:scale-110 transition-transform">
+                    <svg className="w-3.5 h-3.5 text-indigo-400 font-black" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                  </div>
+                  Admin Center
+                </button>
+              )}
+
               {/* Network IP */}
               <div className="hidden md:flex items-center gap-2 text-[10px] font-bold text-slate-500 bg-slate-100/80 border border-slate-200 px-4 py-2 rounded-full">
                 <div className="w-1.5 h-1.5 rounded-full bg-slate-400"></div>
@@ -1953,9 +2053,11 @@ import { Coins } from 'lucide-react';
                   <button 
                     onClick={() => {
                       setIsAuthenticated(false);
+                      setIsAdmin(false);
                       setAuthEmail('');
                       localStorage.removeItem('proxy_auth_status');
                       localStorage.removeItem('proxy_auth_email');
+                      localStorage.removeItem('proxy_admin_status');
                     }}
                     className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all border border-transparent hover:border-rose-100 group"
                     title="Logout"
@@ -3561,6 +3663,270 @@ import { Coins } from 'lucide-react';
                 </div>
                 <div className="flex-1 min-h-0">
                   <TokenAnalysis />
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* Admin Dashboard Modal */}
+        <AnimatePresence>
+          {isAdminDashboardOpen && (
+            <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                className="bg-white w-full max-w-6xl h-[90vh] rounded-[3rem] shadow-2xl overflow-hidden flex flex-col border border-white/20"
+              >
+                {/* Header */}
+                <div className="bg-slate-900 p-8 flex items-center justify-between">
+                  <div className="flex items-center gap-5">
+                    <div className="p-4 bg-indigo-600 rounded-2xl shadow-lg shadow-indigo-500/20">
+                      <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
+                    </div>
+                    <div>
+                      <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Performance Intelligence</h2>
+                      <p className="text-[10px] font-bold text-indigo-400 uppercase tracking-[0.3em] mt-1">Global Associate KPI Dashboard</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-6">
+                    {/* Date Filters */}
+                    <div className="flex items-center gap-3 bg-white/5 p-1.5 rounded-2xl border border-white/10">
+                      <div className="flex flex-col px-3">
+                        <span className="text-[8px] font-black text-indigo-400 uppercase tracking-widest mb-1">Start Period</span>
+                        <input 
+                          type="date"
+                          value={adminStartDate}
+                          onChange={(e) => setAdminStartDate(e.target.value)}
+                          className="bg-transparent text-white text-[10px] font-bold outline-none cursor-pointer"
+                        />
+                      </div>
+                      <div className="w-[1px] h-8 bg-white/10"></div>
+                      <div className="flex flex-col px-3">
+                        <span className="text-[8px] font-black text-indigo-400 uppercase tracking-widest mb-1">End Period</span>
+                        <input 
+                          type="date"
+                          value={adminEndDate}
+                          onChange={(e) => setAdminEndDate(e.target.value)}
+                          className="bg-transparent text-white text-[10px] font-bold outline-none cursor-pointer"
+                        />
+                      </div>
+                    </div>
+
+                    <button 
+                      onClick={fetchHistory}
+                      disabled={isHistoryLoading}
+                      className="flex items-center gap-2 px-5 py-3 bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-all text-[10px] font-black uppercase tracking-widest text-white shadow-xl shadow-indigo-500/20"
+                    >
+                      <svg className={`w-4 h-4 ${isHistoryLoading ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                      Sync Realtime Data
+                    </button>
+                    <button 
+                      onClick={() => setIsAdminDashboardOpen(false)}
+                      className="p-3 hover:bg-white/10 rounded-xl transition-all text-white/40 hover:text-white"
+                    >
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 overflow-y-auto p-10 custom-scrollbar bg-slate-50/50">
+                  {isHistoryLoading && historySessions.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full gap-5">
+                      <div className="w-12 h-12 border-4 border-slate-900 border-t-indigo-500 rounded-full animate-spin"></div>
+                      <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Aggregating Metrics...</span>
+                    </div>
+                  ) : (
+                    <div className="space-y-10">
+                      {/* Top KPIs */}
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                        {[
+                          { label: 'Total Case Studies', value: filteredAdminSessions.length, icon: 'M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253', color: 'indigo' },
+                          { label: 'Active Associates', value: Object.keys([...new Set(filteredAdminSessions.map(s => s.saved_by || 'Unknown'))]).length, icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z', color: 'emerald' },
+                          { label: 'Today\'s Output', value: filteredAdminSessions.filter(s => new Date(s.created_at).toDateString() === new Date().toDateString()).length, icon: 'M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z', color: 'amber' },
+                          { label: 'Intelligence Depth', value: 'High', icon: 'M13 10V3L4 14h7v7l9-11h-7z', color: 'rose' }
+                        ].map((stat, i) => (
+                          <div key={i} className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all">
+                            <div className="flex items-center gap-4 mb-4">
+                              <div className={`p-3 bg-${stat.color}-50 text-${stat.color}-600 rounded-2xl`}>
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d={stat.icon}></path></svg>
+                              </div>
+                              <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{stat.label}</span>
+                            </div>
+                            <div className="text-3xl font-black text-slate-900">{stat.value}</div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Visual KPI Analysis */}
+                      <div className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm">
+                        <div className="flex items-center justify-between mb-8">
+                          <div className="flex items-center gap-4">
+                            <div className="p-3 bg-indigo-600 rounded-2xl shadow-lg shadow-indigo-200">
+                              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path></svg>
+                            </div>
+                            <div>
+                              <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">KPI Distribution Analysis</h3>
+                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Associate Case Study Comparison</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 px-4 py-2 bg-slate-50 rounded-full border border-slate-100">
+                             <div className="w-2 h-2 rounded-full bg-indigo-500"></div>
+                             <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest">Performance Metrics</span>
+                          </div>
+                        </div>
+
+                        <div className="h-[400px] w-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart
+                              data={chartData}
+                              layout="vertical"
+                              margin={{ top: 5, right: 30, left: 100, bottom: 5 }}
+                            >
+                              <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
+                              <XAxis type="number" hide />
+                              <YAxis 
+                                dataKey="name" 
+                                type="category" 
+                                tick={{ fontSize: 10, fontWeight: 900, fill: '#64748b' }}
+                                width={120}
+                              />
+                              <Tooltip 
+                                cursor={{ fill: '#f8fafc' }}
+                                contentStyle={{ 
+                                  borderRadius: '16px', 
+                                  border: 'none', 
+                                  boxShadow: '0 20px 40px -10px rgba(0,0,0,0.1)',
+                                  fontSize: '10px',
+                                  fontWeight: 900,
+                                  textTransform: 'uppercase',
+                                  letterSpacing: '0.1em'
+                                }}
+                              />
+                              <Bar 
+                                dataKey="count" 
+                                radius={[0, 10, 10, 0]} 
+                                barSize={24}
+                              >
+                                {chartData.map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={index % 2 === 0 ? '#4f46e5' : '#8b5cf6'} />
+                                ))}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+
+                      {/* Performance Table */}
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                        {/* Associate Leaderboard */}
+                        <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden">
+                          <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                            <div className="flex items-center gap-4">
+                              <div className="p-2.5 bg-indigo-600 rounded-xl">
+                                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+                              </div>
+                              <h3 className="text-[11px] font-black text-slate-900 uppercase tracking-widest">Associate Output Ranking</h3>
+                            </div>
+                          </div>
+                          <div className="p-4">
+                            <table className="w-full text-left">
+                              <thead>
+                                <tr className="text-[9px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">
+                                  <th className="px-6 py-4">Associate</th>
+                                  <th className="px-6 py-4 text-center">Case Studies</th>
+                                  <th className="px-6 py-4 text-right">Last Session</th>
+                                </tr>
+                              </thead>
+                              <tbody className="text-xs">
+                                {Object.entries(
+                                  filteredAdminSessions.reduce((acc: any, s: any) => {
+                                    const email = s.saved_by || 'Unknown';
+                                    if (!acc[email]) acc[email] = { count: 0, last: '' };
+                                    acc[email].count++;
+                                    if (!acc[email].last || new Date(s.created_at) > new Date(acc[email].last)) {
+                                      acc[email].last = s.created_at;
+                                    }
+                                    return acc;
+                                  }, {})
+                                )
+                                .sort((a: any, b: any) => b[1].count - a[1].count)
+                                .map(([email, stats]: [string, any], idx) => (
+                                  <tr key={email} className="group hover:bg-slate-50 transition-colors">
+                                    <td className="px-6 py-4">
+                                      <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-black text-slate-400 border border-slate-200 text-[10px]">
+                                          {idx + 1}
+                                        </div>
+                                        <div>
+                                          <div className="font-bold text-slate-900">{email.split('@')[0].replace('.', ' ').toUpperCase()}</div>
+                                          <div className="text-[9px] font-medium text-slate-400 lowercase">{email}</div>
+                                        </div>
+                                      </div>
+                                    </td>
+                                    <td className="px-6 py-4 text-center">
+                                      <span className="inline-flex px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full font-black text-[10px]">
+                                        {stats.count}
+                                      </span>
+                                    </td>
+                                    <td className="px-6 py-4 text-right font-mono text-slate-400 text-[9px]">
+                                      {new Date(stats.last).toLocaleDateString()}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+
+                        {/* Recent Activity Feed */}
+                        <div className="bg-white rounded-[2.5rem] border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                          <div className="p-8 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                            <div className="flex items-center gap-4">
+                              <div className="p-2.5 bg-slate-900 rounded-xl">
+                                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                              </div>
+                              <h3 className="text-[11px] font-black text-slate-900 uppercase tracking-widest">Real-time Stream</h3>
+                            </div>
+                          </div>
+                          <div className="flex-1 overflow-y-auto p-4 custom-scrollbar max-h-[400px]">
+                            <div className="space-y-4">
+                              {[...filteredAdminSessions].sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 15).map((session, i) => (
+                                <div key={session.id} className="p-5 bg-white border border-slate-100 rounded-2xl hover:border-indigo-100 transition-all group flex items-center justify-between">
+                                  <div className="flex items-center gap-4">
+                                    <div className="h-10 w-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-300 group-hover:bg-indigo-50 group-hover:text-indigo-500 transition-all font-black text-xs">
+                                      {session.product_name?.charAt(0) || 'P'}
+                                    </div>
+                                    <div>
+                                      <div className="text-[11px] font-black text-slate-900 group-hover:text-indigo-600 transition-all">{session.product_name || 'Generic Analysis'}</div>
+                                      <div className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1 flex items-center gap-2">
+                                        <span className="text-indigo-500">{session.gl_id}</span>
+                                        <span>•</span>
+                                        <span>{session.saved_by?.split('@')[0]}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="text-[9px] font-mono text-slate-300 group-hover:text-slate-400">
+                                    {new Date(session.created_at).getHours()}:{new Date(session.created_at).getMinutes()}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="p-8 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-2 h-2 bg-emerald-500 animate-pulse rounded-full"></div>
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Live Integration Feed Active</span>
+                  </div>
+                  <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-widest">Administrator: {authEmail}</span>
                 </div>
               </motion.div>
             </div>
