@@ -6,6 +6,7 @@ export interface HistorySession {
   gl_id: string;
   product_name: string;
   created_at: string;
+  saved_by?: string;
   parameters?: any;
   csl_data?: any;
   match_data?: any;
@@ -98,8 +99,11 @@ export const historyService = {
         if (!normalized.gl_id && s.glid) normalized.gl_id = s.glid;
         if (!normalized.gl_id && s.glId) normalized.gl_id = s.glId;
         if (!normalized.product_name && s.PRODUCT_NAME) normalized.product_name = s.PRODUCT_NAME;
+        if (!normalized.created_at && s.created_at) normalized.created_at = s.created_at;
         if (!normalized.created_at && s.CREATED_AT) normalized.created_at = s.CREATED_AT;
         if (!normalized.created_at && s.timestamp) normalized.created_at = s.timestamp;
+        if (!normalized.saved_by && s.SAVED_BY) normalized.saved_by = s.SAVED_BY;
+        if (!normalized.saved_by && s.savedBy) normalized.saved_by = s.savedBy;
         
         return normalized;
       }).filter(s => s.id || s.gl_id);
@@ -157,7 +161,8 @@ export const historyService = {
       if (!data.mcat_data && data.MCAT_DATA) data.mcat_data = data.MCAT_DATA;
       if (!data.company_overviews && data.COMPANY_OVERVIEWS) data.company_overviews = data.COMPANY_OVERVIEWS;
       if (!data.additional_comments && data.ADDITIONAL_COMMENTS) data.additional_comments = data.ADDITIONAL_COMMENTS;
-      if (!data.mismatch_status && data.MISMATCH_STATUS) data.mismatch_status = data.MISMATCH_STATUS;
+      if (!data.saved_by && data.SAVED_BY) data.saved_by = data.SAVED_BY;
+      if (!data.saved_by && data.savedBy) data.saved_by = data.savedBy;
 
       // Some GAS scripts return strings that need parsing
       const parseIfString = (val: any) => {

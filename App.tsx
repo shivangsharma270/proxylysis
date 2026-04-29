@@ -197,7 +197,8 @@ import { Coins } from 'lucide-react';
           scan_results: scanResults,
           mcat_data: mcatData,
           company_overviews: sessionOverviews,
-          additional_comments: additionalComments
+          additional_comments: additionalComments,
+          saved_by: authEmail
         };
 
         const result = await historyService.saveSession(payload);
@@ -3620,6 +3621,12 @@ import { Coins } from 'lucide-react';
                             </span>
                             <span>•</span>
                             <span>{new Date(session.created_at).toLocaleString()}</span>
+                            {session.saved_by && (
+                              <>
+                                <span>•</span>
+                                <span className="text-indigo-500 font-black uppercase text-[8px]">{session.saved_by.split('@')[0].replace('.', ' ')}</span>
+                              </>
+                            )}
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
