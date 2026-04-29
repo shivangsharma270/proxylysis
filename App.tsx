@@ -84,7 +84,7 @@ import { Coins } from 'lucide-react';
       invoiceDates: string[]
     } | null>(null);
 
-    const [backendStatus, setBackendStatus] = useState<{csl: boolean, match: boolean, services: boolean, category: boolean, complaints: boolean, ratings: boolean, fraud: boolean, overview: boolean, summary: boolean, mcat: boolean, history: boolean}>({
+    const [backendStatus, setBackendStatus] = useState<{csl: boolean, match: boolean, services: boolean, category: boolean, complaints: boolean, ratings: boolean, fraud: boolean, overview: boolean, summary: boolean, history: boolean}>({
       csl: false, 
       match: false, 
       services: false,
@@ -94,7 +94,6 @@ import { Coins } from 'lucide-react';
       fraud: false,
       overview: false,
       summary: false,
-      mcat: false,
       history: false
     });
     const [error, setError] = useState<string | null>(null);
@@ -629,16 +628,6 @@ import { Coins } from 'lucide-react';
           overviewOk = overviewRes.ok;
         } catch {}
 
-        let mcatOk = false;
-        try {
-          const mcatRes = await fetch(`${BRIDGE_HOST}:5010/mcat`, { 
-            method: 'POST', 
-            headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify({ ping: true }) 
-          });
-          mcatOk = mcatRes.ok;
-        } catch {}
-
         try {
           const summaryRes = await fetch(`${BRIDGE_HOST}:5008/summary`, { 
             method: 'POST', 
@@ -658,7 +647,6 @@ import { Coins } from 'lucide-react';
           fraud: fraudOk, 
           overview: overviewOk,
           summary: summaryOk,
-          mcat: mcatOk,
           history: true
         });
       };
@@ -710,7 +698,7 @@ import { Coins } from 'lucide-react';
                   fetch(`${BRIDGE_HOST}:5010/mcat`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ glid: glid })
+                    body: JSON.stringify({ glId: glid })
                   })
                 ]);
 
@@ -921,7 +909,7 @@ import { Coins } from 'lucide-react';
       fetch(`${BRIDGE_HOST}:5010/mcat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ glid: glid })
+        body: JSON.stringify({ glId: glid })
       })
       .then(res => res.json())
       .then(mcatRes => {
@@ -1045,32 +1033,34 @@ import { Coins } from 'lucide-react';
 
         await Promise.all(batch.map(async (glId) => {
           try {
-            // Ensure we have MCAT data. If not, fetch it first.
-            let mcatCategories = sessionOverviews[glId]?.mcat;
+            // Ensure we have Company Overview data. If not, fetch it first.
+            const overview = sessionOverviews[glId]?.merp;
+            let approvedProducts = overview?.product_data?.approved_products?.names || [];
             
-            if (!mcatCategories) {
-              const mcatRes = await fetch(`${BRIDGE_HOST}:5010/mcat`, {
+            if (!approvedProducts || approvedProducts.length === 0) {
+              const overviewRes = await fetch(`${BRIDGE_HOST}:5007/overview`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ glid: glId })
+                body: JSON.stringify({ glid: glId, AK: settings.authToken })
               });
-              if (mcatRes.ok) {
-                const d = await mcatRes.json();
-                mcatCategories = d.mcat_data || [];
+              if (overviewRes.ok) {
+                const d = await overviewRes.json();
+                const merpData = d.data || null;
+                approvedProducts = merpData?.product_data?.approved_products?.names || [];
                 // Update cache
                 setSessionOverviews(prev => ({
                   ...prev,
-                  [glId]: { ...prev[glId], mcat: mcatCategories }
+                  [glId]: { ...prev[glId], merp: merpData }
                 }));
               }
             }
 
-            if (!mcatCategories || mcatCategories.length === 0) {
+            if (!approvedProducts || approvedProducts.length === 0) {
               setMismatchAnalysisStatus(prev => ({ ...prev, [glId]: 'Mismatch Found' }));
               return;
             }
 
-            const result = await analyzeProductMismatch(settings.productName, mcatCategories);
+            const result = await analyzeProductMismatch(settings.productName, approvedProducts);
             setMismatchAnalysisStatus(prev => ({ 
               ...prev, 
               [glId]: result === 'Mismatch' ? 'Mismatch Found' : 'No Mismatch' 
@@ -1646,7 +1636,7 @@ import { Coins } from 'lucide-react';
             const mcatRes = await fetch(`${BRIDGE_HOST}:5010/mcat`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ glid: item.glId })
+              body: JSON.stringify({ glId: item.glId })
             }).then(r => r.ok ? r.json() : null);
 
             const bsCompRes = await fetch(`${BRIDGE_HOST}:5004/bs_complaints`, {
@@ -1754,7 +1744,6 @@ import { Coins } from 'lucide-react';
                       { id: 'FRAUD', port: 5006, status: backendStatus.fraud, color: 'bg-pink-500' },
                       { id: 'OVERVIEW', port: 5007, status: backendStatus.overview, color: 'bg-cyan-500' },
                       { id: 'SUMMARY', port: 5008, status: backendStatus.summary, color: 'bg-teal-500' },
-                      { id: 'MCAT', port: 5010, status: backendStatus.mcat, color: 'bg-amber-600' },
                       { id: 'SHEETS', port: 'Cloud', status: true, color: 'bg-green-600' },
                     ].map((svc) => (
                       <div key={svc.id} className="flex items-center justify-between group/item">

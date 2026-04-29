@@ -180,29 +180,29 @@ Return ONLY the JSON object.`;
 };
 
 /**
- * Uses Gemini to determine if the Product is a subset or relevant match within the MCAT categories.
+ * Uses Gemini to determine if the Target Product is matching or a subject of Approved Products.
  */
-export const analyzeProductMismatch = async (productName: string, mcatCategories: string[]) => {
-  if (!productName || !mcatCategories || mcatCategories.length === 0) {
+export const analyzeProductMismatch = async (productName: string, approvedProducts: string[]) => {
+  if (!productName || !approvedProducts || approvedProducts.length === 0) {
     return "Mismatch";
   }
 
-  const systemInstruction = `You are a product category expert. Your task is to determine if a specific "Product" is a subset of, or a relevant match for, a list of "MCAT Categories".
+  const systemInstruction = `You are a product catalog auditor. Your task is to determine if a specific "Target Product" is matching or a subject of (logical subset, specific type, or relevant match for) a list of "Approved Products" that a seller is allowed to transact.
 
 LOGIC:
-- A "No Mismatch" occurs if the Product is a type of item, a specific model, a synonym, or a subset that logically falls under any of the provided MCAT Categories.
-- A "Mismatch" occurs if the Product is completely unrelated to all the provided MCAT Categories.
+- A "No Mismatch" occurs if the Target Product matches an entry, is a specific model/type of an entry, a synonym, or a subset that logically falls under any of the provided Approved Products.
+- A "Mismatch" occurs if the Target Product is completely unrelated to all the provided Approved Products.
 
 INPUT:
-- Product: ${productName}
-- MCAT Categories: ${mcatCategories.join(", ")}
+- Target Product: ${productName}
+- Approved Products: ${approvedProducts.join(", ")}
 
 OUTPUT:
 Return a JSON object with a single key "result" which must be either "No Mismatch" or "Mismatch".
 Return ONLY the JSON object.`;
 
   try {
-    const text = await callGateway(systemInstruction, `Compare Product "${productName}" with Categories: ${mcatCategories.join(", ")}`, true);
+    const text = await callGateway(systemInstruction, `Compare Target Product "${productName}" with Approved List: ${approvedProducts.join(", ")}`, true);
     const parsed = JSON.parse(text.trim());
     return parsed.result || "Mismatch";
   } catch (error) {

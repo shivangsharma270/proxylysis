@@ -87,8 +87,6 @@ export const historyService = {
         list = json.data;
       } else if (json && Array.isArray(json.sessions)) {
         list = json.sessions;
-      } else if (json && json.status === 'success' && Array.isArray(json.data)) {
-        list = json.data;
       }
 
       const filtered = list.filter(s => s && typeof s === 'object').map(s => {
