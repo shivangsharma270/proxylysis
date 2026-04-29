@@ -98,8 +98,12 @@ import { Coins } from 'lucide-react';
     });
     const [error, setError] = useState<string | null>(null);
     const [networkIp, setNetworkIp] = useState<string>('Detecting...');
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
-    const [authEmail, setAuthEmail] = useState('');
+    const [isAuthenticated, setIsAuthenticated] = useState(() => {
+      return localStorage.getItem('proxy_auth_status') === 'true';
+    });
+    const [authEmail, setAuthEmail] = useState(() => {
+      return localStorage.getItem('proxy_auth_email') || '';
+    });
     const [loginError, setLoginError] = useState('');
 
     const hardcodedUsers = {
@@ -118,6 +122,8 @@ import { Coins } from 'lucide-react';
       if (hardcodedUsers[emailLower as keyof typeof hardcodedUsers] === pass) {
         setIsAuthenticated(true);
         setAuthEmail(emailLower);
+        localStorage.setItem('proxy_auth_status', 'true');
+        localStorage.setItem('proxy_auth_email', emailLower);
         setLoginError('');
       } else {
         setLoginError('Invalid Email or Password');
@@ -1943,6 +1949,8 @@ import { Coins } from 'lucide-react';
                     onClick={() => {
                       setIsAuthenticated(false);
                       setAuthEmail('');
+                      localStorage.removeItem('proxy_auth_status');
+                      localStorage.removeItem('proxy_auth_email');
                     }}
                     className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all border border-transparent hover:border-rose-100 group"
                     title="Logout"
