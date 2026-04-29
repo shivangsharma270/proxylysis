@@ -153,6 +153,7 @@ import { Coins } from 'lucide-react';
     const [historySearchTerm, setHistorySearchTerm] = useState('');
     const [isHistoryLoading, setIsHistoryLoading] = useState(false);
     const [isSavingSession, setIsSavingSession] = useState(false);
+    const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
     const [sessionOverviews, setSessionOverviews] = useState<Record<string, any>>({});
     const [additionalComments, setAdditionalComments] = useState('');
     const editorRef = useRef<HTMLDivElement>(null);
@@ -183,7 +184,8 @@ import { Coins } from 'lucide-react';
           raw_services: rawServicesResponse
         };
 
-        const payload = {
+        const payload: any = {
+          id: currentSessionId,
           gl_id: settings.glId,
           product_name: settings.productName,
           parameters: {
@@ -254,6 +256,8 @@ import { Coins } from 'lucide-react';
           return;
         }
 
+        setCurrentSessionId(sessionId);
+        
         // Restore all states with safety checks
         if (session.parameters) setSettings(session.parameters);
         
@@ -1459,6 +1463,7 @@ import { Coins } from 'lucide-react';
       e.preventDefault();
       if (isSyncing) return;
 
+      setCurrentSessionId(null);
       setIsSyncing(true);
       setError(null);
       setRawCslResponse(null);

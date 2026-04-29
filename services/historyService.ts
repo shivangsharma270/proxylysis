@@ -26,19 +26,19 @@ export const historyService = {
    * Save a complete analysis session snapshot.
    */
   saveSession: async (data: any): Promise<{ id: string }> => {
-    // Generate unique fixed ID: glid-date-epoch
-    const currentDate = new Date().toISOString().split('T')[0];
-    const timestamp = Date.now();
-    const glId = data.gl_id || 'unknown';
-    const customId = `${glId}-${currentDate}-${timestamp}`;
+    // Use existing ID if provided, otherwise generate a unique fixed ID: glid-date-epoch
+    const customId = data.id || `${data.gl_id || 'unknown'}-${new Date().toISOString().split('T')[0]}-${Date.now()}`;
     
     const payload = {
+      ...data,
       action: 'save',
       id: customId,
-      created_at: new Date().toISOString(),
-      ...data,
     };
 
+    if (!payload.created_at) {
+      payload.created_at = new Date().toISOString();
+    }
+    
     console.log("Saving session to Google Sheets:", customId, payload);
 
     try {
