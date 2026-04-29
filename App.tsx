@@ -536,7 +536,7 @@ import { Coins } from 'lucide-react';
 
     const cachedCount = useMemo(() => {
       if (!involvedGLIDs) return 0;
-      return involvedGLIDs.filter(item => item && item.glId && sessionOverviews[item.glId]?.merp).length;
+      return involvedGLIDs.filter(item => item && item.glId && sessionOverviews[item.glId]?.isComplete).length;
     }, [involvedGLIDs, sessionOverviews]);
 
     const isGlidSuspect = (glId: string, row: any) => {
@@ -567,7 +567,15 @@ import { Coins } from 'lucide-react';
       if (blFreq > 40 && lmsReplies < 10) return true;
 
       // 6. BS complaints > 3
-      if (Number(row.bsComplaints || 0) > 3) return true;
+      const complaintsCount = overview.bsComplaints !== undefined ? overview.bsComplaints : Number(row.bsComplaints || 0);
+      if (complaintsCount > 3) return true;
+
+      // 7. Supplier Rating < 3.5 (but > 0)
+      const rating = overview.supplierRating !== undefined ? overview.supplierRating : Number(row.supplierRating || 0);
+      if (rating < 3.5 && rating > 0) return true;
+
+      // 8. Mismatch Found
+      if (mismatchAnalysisStatus[glId] === 'Mismatch Found') return true;
 
       return false;
     };
@@ -604,8 +612,8 @@ import { Coins } from 'lucide-react';
       if (blFreq > 40 && lmsReplies < 10) reasons.push(`High BL Purchase (${blFreq} > 40) with Low LMS Replies (${lmsReplies} < 10)`);
 
       // 6. BS complaints > 3
-      const bsComplaints = Number(row.bsComplaints || 0);
-      if (bsComplaints > 3) reasons.push(`BS Complaints: ${bsComplaints} (> 3)`);
+      const bsComplaintsCount = overview.bsComplaints !== undefined ? overview.bsComplaints : Number(row.bsComplaints || 0);
+      if (bsComplaintsCount > 3) reasons.push(`BS Complaints: ${bsComplaintsCount} (> 3)`);
 
       const score = reasons.length > 0 ? Math.round((reasons.length / 6) * 100) : 0;
       const description = reasons.length > 0 ? `Detected Flags: ${reasons.join(' | ')}` : "No system red-flags detected";
@@ -818,66 +826,87 @@ import { Coins } from 'lucide-react';
           for (const item of involvedGLIDs) {
             if (!item || !item.glId) continue;
             const glid = item.glId;
-            if (!sessionOverviews[glid]) {
+            
+            // Check if we already have the core intelligence data
+            if (!sessionOverviews[glid] || !sessionOverviews[glid].isComplete) {
               try {
-                const [merpRes, rsRes, sumRes, mcatRes] = await Promise.all([
+                const [merpRes, rsRes, sumRes, mcatRes, srvRes, compRes, ratRes, bsCompRes] = await Promise.all([
                   fetch(`${BRIDGE_HOST}:5007/overview`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ glid, AK: settings.authToken })
-                  }),
+                  }).then(r => r.ok ? r.json() : null),
                   fetch(`${BRIDGE_HOST}:5004/redshift_overview`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ glId: glid })
-                  }),
+                  }).then(r => r.ok ? r.json() : null),
                   fetch(`${BRIDGE_HOST}:5008/summary`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ glid })
-                  }),
+                  }).then(r => r.ok ? r.json() : null),
                   fetch(`${BRIDGE_HOST}:5010/mcat`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ glId: glid })
-                  })
+                  }).then(r => r.ok ? r.json() : null),
+                  fetch(`${BRIDGE_HOST}:5002/services`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ glid, AK: settings.authToken })
+                  }).then(r => r.ok ? r.json() : null),
+                  fetch(`${BRIDGE_HOST}:5004/complaints`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ glId: glid })
+                  }).then(r => r.ok ? r.json() : null),
+                  fetch(`${BRIDGE_HOST}:5005/rating`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ glId: glid, AK: settings.authToken })
+                  }).then(r => r.ok ? r.json() : null),
+                  fetch(`${BRIDGE_HOST}:5004/bs_complaints`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ glId: glid })
+                  }).then(r => r.ok ? r.json() : null)
                 ]);
 
-                let merpData = null;
-                let rsData = null;
-                let sumData = null;
-                let mcatDataBatch = null;
-
-                if (merpRes.ok) {
-                  const d = await merpRes.json();
-                  merpData = d.data;
-                  if (merpData?.glusr_data) {
-                    searchOnlinePresence(
-                      merpData.glusr_data.companyname,
-                      `${merpData.glusr_data.address}, ${merpData.glusr_data.city}`,
-                      merpData?.gst_data?.[0]?.gst || '',
-                      merpData?.client_contact_numbers?.[0]?.value || ''
-                    ).then(presence => {
-                      setOnlinePresenceCache(prev => ({ ...prev, [glid]: presence }));
-                    }).catch(() => {});
-                  }
-                }
-                if (rsRes.ok) rsData = await rsRes.json();
-                if (sumRes.ok) {
-                  const d = await sumRes.json();
-                  sumData = d?.parsed_response?.top_bar_data?.[0] || null;
-                }
-                if (mcatRes.ok) {
-                  const d = await mcatRes.json();
-                  mcatDataBatch = d.mcat_data || [];
+                const merpData = merpRes?.data || null;
+                const rsData = rsRes || null;
+                const sumData = sumRes?.parsed_response?.top_bar_data?.[0] || null;
+                const mcatDataBatch = mcatRes?.mcat_data || [];
+                
+                // Process services
+                const srvDetails = srvRes?.data?.service_details || [];
+                const uniqueServices = Array.from(new Set(srvDetails.map((d: any) => d.SERVICE_NAME))) as string[];
+                let earliestDate = '-';
+                if (srvDetails.length > 0) {
+                  const sorted = srvDetails.sort((a: any, b: any) => parseMerpDate(a.STARTDATE) - parseMerpDate(b.STARTDATE));
+                  earliestDate = sorted[0].STARTDATE;
                 }
 
                 setSessionOverviews(prev => ({
                   ...prev,
-                  [glid]: { merp: merpData, redshift: rsData, summary: sumData, mcat: mcatDataBatch }
+                  [glid]: { 
+                    merp: merpData, 
+                    redshift: rsData, 
+                    summary: sumData, 
+                    mcat: mcatDataBatch,
+                    services: { names: uniqueServices, paidSince: earliestDate },
+                    bsComplaints: compRes?.count || 0,
+                    supplierRating: ratRes?.avg_rating || 0,
+                    bs_extra: bsCompRes || null,
+                    isComplete: true
+                  }
                 }));
+
+                // Background tasks
+                if (merpData?.glusr_data) {
+                  searchOnlinePresence(
+                    merpData.glusr_data.companyname,
+                    `${merpData.glusr_data.address}, ${merpData.glusr_data.city}`,
+                    merpData?.gst_data?.[0]?.gst || '',
+                    merpData?.client_contact_numbers?.[0]?.value || ''
+                  ).then(presence => {
+                    setOnlinePresenceCache(prev => ({ ...prev, [glid]: presence }));
+                  }).catch(() => {});
+                }
               } catch (e) {
-                console.error(`Auto-fetch failed for ${glid}`, e);
+                console.error(`Background fetch failed for ${glid}`, e);
               }
             }
           }
@@ -1229,102 +1258,27 @@ import { Coins } from 'lucide-react';
 
         const involved = await identifyInvolvedGLIDs(cslTableData, filteredMatchmakingData, settings.productName);
         
-        const detailedSuspects = [];
-        const servicesLogMap: Record<string, any> = { ...rawServicesResponse };
-        const categoryLogMap: Record<string, any> = { ...rawCategoryResponse };
-        const complaintsLogMap: Record<string, any> = { ...rawComplaintsResponse };
-        const ratingsLogMap: Record<string, any> = { ...rawRatingsResponse };
+        // Unblock UI immediately with basic data
+        const basicSuspects = involved.map(item => ({
+          ...item,
+          servicesAvailed: [],
+          paidSince: '-',
+          productMismatched: 'pending',
+          bsComplaints: null,
+          supplierRating: null
+        }));
 
-        for (let i = 0; i < involved.length; i++) {
-          const item = involved[i];
-          let servicesData: any = { servicesAvailed: [], paidSince: '-' };
-          let bsComplaints: number | null = null; 
-          let supplierRating: number | null = null;
-
-          // Fetch Active Services (5002)
-          try {
-            const srvRes = await fetch(`${BRIDGE_HOST}:5002/services`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ glid: item.glId, AK: settings.authToken })
-            });
-            if (srvRes.ok) {
-              const srvData = await srvRes.json();
-              servicesLogMap[item.glId] = srvData;
-              const details = srvData?.data?.service_details || [];
-              const uniqueServices = Array.from(new Set(details.map((d: any) => d.SERVICE_NAME))) as string[];
-              let earliestDate = '-';
-              if (details.length > 0) {
-                const sorted = details.sort((a: any, b: any) => parseMerpDate(a.STARTDATE) - parseMerpDate(b.STARTDATE));
-                earliestDate = sorted[0].STARTDATE;
-              }
-              servicesData = { servicesAvailed: uniqueServices, paidSince: earliestDate };
-            }
-          } catch {}
-
-          // Fetch Category Report (5003)
-          try {
-            const catRes = await fetch(`${BRIDGE_HOST}:5003/category`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ glId: item.glId })
-            });
-            if (catRes.ok) {
-              const catData = await catRes.json();
-              categoryLogMap[item.glId] = catData;
-            }
-          } catch {}
-
-          // Fetch BS Complaints (5004 - Redshift)
-          try {
-            const compRes = await fetch(`${BRIDGE_HOST}:5004/complaints`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ glId: item.glId })
-            });
-            if (compRes.ok) {
-              const compData = await compRes.json();
-              complaintsLogMap[item.glId] = compData;
-              bsComplaints = compData?.count !== undefined ? compData.count : 0;
-            } else { bsComplaints = 0; }
-          } catch { bsComplaints = 0; }
-
-          // Fetch Supplier Ratings (5005)
-          try {
-            const ratRes = await fetch(`${BRIDGE_HOST}:5005/rating`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ glId: item.glId, AK: settings.authToken })
-            });
-            if (ratRes.ok) {
-              const ratData = await ratRes.json();
-              ratingsLogMap[item.glId] = ratData;
-              supplierRating = ratData?.avg_rating !== undefined ? ratData.avg_rating : 0;
-            } else { supplierRating = 0; }
-          } catch { supplierRating = 0; }
-
-          detailedSuspects.push({
-            ...item,
-            ...servicesData,
-            productMismatched: 'pending',
-            bsComplaints: bsComplaints,
-            supplierRating: supplierRating
-          });
-        }
-
-        setRawServicesResponse(servicesLogMap);
-        setRawCategoryResponse(categoryLogMap);
-        setRawComplaintsResponse(complaintsLogMap);
-        setRawRatingsResponse(ratingsLogMap);
         clearInterval(progressTimer);
         setAnalysisProgress(100);
-        setInvolvedGLIDs(detailedSuspects);
+        setInvolvedGLIDs(basicSuspects);
         
-        // Initialize mismatch status and trigger analysis
+        // Initialize mismatch status
         const initialStatus: Record<string, any> = {};
-        detailedSuspects.forEach(s => { initialStatus[s.glId] = 'pending'; });
+        basicSuspects.forEach(s => { initialStatus[s.glId] = 'pending'; });
         setMismatchAnalysisStatus(initialStatus);
-        runMismatchAnalysis(detailedSuspects.map(s => s.glId));
+        
+        // runMismatchAnalysis still runs in background
+        runMismatchAnalysis(basicSuspects.map(s => s.glId));
 
         setTimeout(() => setIsAnalyzingGLIDs(false), 500);
       } catch (err: any) {
@@ -1680,157 +1634,27 @@ import { Coins } from 'lucide-react';
         const involvedRaw = await identifyInvolvedGLIDs(cslTableData, filteredMatchmakingData || [], settings.productName);
         const involved = Array.isArray(involvedRaw) ? involvedRaw.filter(i => i && i.glId) : [];
         
-        const detailedSuspects = [];
-        const servicesLogMap: Record<string, any> = {};
-        const categoryLogMap: Record<string, any> = {};
-        const complaintsLogMap: Record<string, any> = {};
-        const ratingsLogMap: Record<string, any> = {};
+        // Unblock UI immediately with basic data
+        const basicSuspects = involved.map(item => ({
+          ...item,
+          servicesAvailed: [],
+          paidSince: '-',
+          productMismatched: 'pending',
+          bsComplaints: null,
+          supplierRating: null
+        }));
 
-        for (let i = 0; i < involved.length; i++) {
-          const item = involved[i];
-          
-          let servicesData: any = { servicesAvailed: [], paidSince: '-' };
-          let bsComplaints: number | null = null; 
-          let supplierRating: number | null = null;
-
-          // Fetch Active Services (5002)
-          try {
-            const srvRes = await fetch(`${BRIDGE_HOST}:5002/services`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ glid: item.glId, AK: settings.authToken })
-            });
-            if (srvRes.ok) {
-              const srvData = await srvRes.json();
-              servicesLogMap[item.glId] = srvData;
-              const details = srvData?.data?.service_details || [];
-              const uniqueServices = Array.from(new Set(details.map((d: any) => d.SERVICE_NAME))) as string[];
-              let earliestDate = '-';
-              if (details.length > 0) {
-                const sorted = details.sort((a: any, b: any) => parseMerpDate(a.STARTDATE) - parseMerpDate(b.STARTDATE));
-                earliestDate = sorted[0].STARTDATE;
-              }
-              servicesData = { servicesAvailed: uniqueServices, paidSince: earliestDate };
-            }
-          } catch {}
-
-          // Fetch Category Report (5003)
-          try {
-            const catRes = await fetch(`${BRIDGE_HOST}:5003/category`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ glId: item.glId })
-            });
-            if (catRes.ok) {
-              const catData = await catRes.json();
-              categoryLogMap[item.glId] = catData;
-            }
-          } catch {}
-
-          // Fetch BS Complaints (5004 - Redshift)
-          try {
-            const compRes = await fetch(`${BRIDGE_HOST}:5004/complaints`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ glId: item.glId })
-            });
-            if (compRes.ok) {
-              const compData = await compRes.json();
-              complaintsLogMap[item.glId] = compData;
-              bsComplaints = compData?.count !== undefined ? compData.count : 0;
-            } else { bsComplaints = 0; }
-          } catch { bsComplaints = 0; }
-
-          // Fetch Supplier Ratings (5005)
-          try {
-            const ratRes = await fetch(`${BRIDGE_HOST}:5005/rating`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ glId: item.glId, AK: settings.authToken })
-            });
-            if (ratRes.ok) {
-              const ratData = await ratRes.json();
-              ratingsLogMap[item.glId] = ratData;
-              supplierRating = ratData?.avg_rating !== undefined ? ratData.avg_rating : 0;
-            } else { supplierRating = 0; }
-          } catch { supplierRating = 0; }
-
-          // [ADDED] Fetch Company Overview Background (Silent)
-          try {
-            const overviewRes = await fetch(`${BRIDGE_HOST}:5007/overview`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ glid: item.glId, AK: settings.authToken })
-            }).then(r => r.ok ? r.json() : null);
-            
-            const redshiftRes = await fetch(`${BRIDGE_HOST}:5004/redshift_overview`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ glId: item.glId })
-            }).then(r => r.ok ? r.json() : null);
-            
-            const summaryRes = await fetch(`${BRIDGE_HOST}:5008/summary`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ glid: item.glId })
-            }).then(r => r.ok ? r.json() : null);
-
-            const mcatRes = await fetch(`${BRIDGE_HOST}:5010/mcat`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ glId: item.glId })
-            }).then(r => r.ok ? r.json() : null);
-
-            const bsCompRes = await fetch(`${BRIDGE_HOST}:5004/bs_complaints`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ glId: item.glId })
-            }).then(r => r.ok ? r.json() : null);
-
-            if (overviewRes) {
-              const merpData = overviewRes.data || null;
-              setSessionOverviews(prev => ({
-                ...prev,
-                [item.glId]: {
-                  merp: merpData,
-                  redshift: redshiftRes || null,
-                  summary: summaryRes?.parsed_response?.top_bar_data?.[0] || null,
-                  mcat: mcatRes?.mcat_data || [],
-                  latlong_status: bsCompRes?.latlong_status || 'Not Verified',
-                  address_status: bsCompRes?.address_status || 'Not Verified'
-                }
-              }));
-              
-              if (merpData?.glusr_data?.companyname) {
-                item.companyName = merpData.glusr_data.companyname;
-              }
-            }
-          } catch (covErr) {
-            console.error(`Silent Overview Error for ${item.glId}:`, covErr);
-          }
-
-          detailedSuspects.push({
-            ...item,
-            ...servicesData,
-            productMismatched: 'pending',
-            bsComplaints: bsComplaints,
-            supplierRating: supplierRating
-          });
-        }
-
-        setRawServicesResponse(servicesLogMap);
-        setRawCategoryResponse(categoryLogMap);
-        setRawComplaintsResponse(complaintsLogMap);
-        setRawRatingsResponse(ratingsLogMap);
         clearInterval(progressTimer);
         setAnalysisProgress(100);
-        setInvolvedGLIDs(detailedSuspects);
-
-        // Initialize mismatch status and trigger analysis
+        setInvolvedGLIDs(basicSuspects);
+        
+        // Initialize mismatch status
         const initialStatus: Record<string, any> = {};
-        detailedSuspects.forEach(s => { initialStatus[s.glId] = 'pending'; });
+        basicSuspects.forEach(s => { initialStatus[s.glId] = 'pending'; });
         setMismatchAnalysisStatus(initialStatus);
-        runMismatchAnalysis(detailedSuspects.map(s => s.glId));
+        
+        // runMismatchAnalysis still runs in background
+        runMismatchAnalysis(basicSuspects.map(s => s.glId));
 
         setTimeout(() => setIsAnalyzingGLIDs(false), 500);
       } catch (err: any) {
@@ -2870,11 +2694,21 @@ import { Coins } from 'lucide-react';
                                           );
                                         })()}
                                       </td>
-                                      <td className="px-8 py-6 border-r border-slate-50 truncate max-w-[200px] group-hover:text-slate-900">{row.lastProductMatch || row.lastProduct || '-'}</td>
-                                      <td className="px-8 py-6 border-r border-slate-50 group-hover:text-slate-900">
-                                        {Array.isArray(row.servicesAvailed) ? row.servicesAvailed.join(', ') : (row.servicesAvailed || '-')}
+                                      <td className="px-8 py-6 border-r border-slate-50 truncate max-w-[200px] group-hover:text-slate-900">
+                                        {row.lastProductMatch || row.lastProduct || '-'}
                                       </td>
-                                      <td className="px-8 py-6 border-r border-slate-50 group-hover:text-slate-900">{row.paidSince || '-'}</td>
+                                      <td className="px-8 py-6 border-r border-slate-50 group-hover:text-slate-900">
+                                        {(() => {
+                                          const overview = sessionOverviews[row.glId];
+                                          const services = overview?.services?.names;
+                                          if (services && services.length > 0) return services.join(', ');
+                                          if (Array.isArray(row.servicesAvailed) && row.servicesAvailed.length > 0) return row.servicesAvailed.join(', ');
+                                          return '-';
+                                        })()}
+                                      </td>
+                                      <td className="px-8 py-6 border-r border-slate-50 group-hover:text-slate-900">
+                                        {sessionOverviews[row.glId]?.services?.paidSince || row.paidSince || '-'}
+                                      </td>
                                       <td className="px-8 py-6 border-r border-slate-50">
                                         {mismatchAnalysisStatus[row.glId] === 'processing' ? (
                                           <div className="flex items-center gap-3">
@@ -2900,7 +2734,11 @@ import { Coins } from 'lucide-react';
                                       </td>
                                       <td className="px-8 py-6 border-r border-slate-50 text-center font-black">
                                         <span className="text-amber-600 flex items-center justify-center gap-1">
-                                          {row.supplierRating !== undefined ? row.supplierRating : (row.supplierRatings || '-')}
+                                          {(() => {
+                                            const rating = sessionOverviews[row.glId]?.supplierRating;
+                                            if (rating !== undefined && rating !== null) return rating;
+                                            return row.supplierRating !== undefined ? row.supplierRating : (row.supplierRatings || '-');
+                                          })()}
                                           <svg className="w-3 h-3 fill-current" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>
                                         </span>
                                       </td>
