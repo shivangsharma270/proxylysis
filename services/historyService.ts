@@ -104,6 +104,7 @@ export const historyService = {
         if (!normalized.created_at && s.timestamp) normalized.created_at = s.timestamp;
         if (!normalized.saved_by && s.SAVED_BY) normalized.saved_by = s.SAVED_BY;
         if (!normalized.saved_by && s.savedBy) normalized.saved_by = s.savedBy;
+        if (!normalized.saved_by && s['Saved By']) normalized.saved_by = s['Saved By'];
         
         return normalized;
       }).filter(s => s.id || s.gl_id);
@@ -163,6 +164,7 @@ export const historyService = {
       if (!data.additional_comments && data.ADDITIONAL_COMMENTS) data.additional_comments = data.ADDITIONAL_COMMENTS;
       if (!data.saved_by && data.SAVED_BY) data.saved_by = data.SAVED_BY;
       if (!data.saved_by && data.savedBy) data.saved_by = data.savedBy;
+      if (!data.saved_by && data['Saved By']) data.saved_by = data['Saved By'];
 
       // Some GAS scripts return strings that need parsing
       const parseIfString = (val: any) => {

@@ -198,7 +198,8 @@ import { Coins } from 'lucide-react';
           mcat_data: mcatData,
           company_overviews: sessionOverviews,
           additional_comments: additionalComments,
-          saved_by: authEmail
+          saved_by: authEmail,
+          SAVED_BY: authEmail
         };
 
         const result = await historyService.saveSession(payload);
