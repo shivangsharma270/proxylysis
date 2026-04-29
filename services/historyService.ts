@@ -105,6 +105,8 @@ export const historyService = {
         if (!normalized.saved_by && s.SAVED_BY) normalized.saved_by = s.SAVED_BY;
         if (!normalized.saved_by && s.savedBy) normalized.saved_by = s.savedBy;
         if (!normalized.saved_by && s['Saved By']) normalized.saved_by = s['Saved By'];
+        if (!normalized.saved_by && s.operator) normalized.saved_by = s.operator;
+        if (!normalized.saved_by && s.email) normalized.saved_by = s.email;
         
         return normalized;
       }).filter(s => s.id || s.gl_id);
@@ -165,6 +167,8 @@ export const historyService = {
       if (!data.saved_by && data.SAVED_BY) data.saved_by = data.SAVED_BY;
       if (!data.saved_by && data.savedBy) data.saved_by = data.savedBy;
       if (!data.saved_by && data['Saved By']) data.saved_by = data['Saved By'];
+      if (!data.saved_by && data.operator) data.saved_by = data.operator;
+      if (!data.saved_by && data.email) data.saved_by = data.email;
 
       // Some GAS scripts return strings that need parsing
       const parseIfString = (val: any) => {

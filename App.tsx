@@ -182,7 +182,8 @@ import { Coins } from 'lucide-react';
           product_name: settings.productName,
           parameters: {
             ...settings,
-            __restoration_context: restorationContext
+            __restoration_context: restorationContext,
+            saved_by: authEmail || 'Unknown'
           },
           csl_data: {
             raw: rawCslResponse,
@@ -198,8 +199,12 @@ import { Coins } from 'lucide-react';
           mcat_data: mcatData,
           company_overviews: sessionOverviews,
           additional_comments: additionalComments,
-          saved_by: authEmail,
-          SAVED_BY: authEmail
+          saved_by: authEmail || 'Unknown',
+          SAVED_BY: authEmail || 'Unknown',
+          savedBy: authEmail || 'Unknown',
+          "Saved By": authEmail || 'Unknown',
+          operator: authEmail || 'Unknown',
+          email: authEmail || 'Unknown'
         };
 
         const result = await historyService.saveSession(payload);
