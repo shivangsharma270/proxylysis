@@ -830,7 +830,7 @@ import { Coins } from 'lucide-react';
             // Check if we already have the core intelligence data
             if (!sessionOverviews[glid] || !sessionOverviews[glid].isComplete) {
               try {
-                const [merpRes, rsRes, sumRes, mcatRes, srvRes, compRes, ratRes, bsCompRes] = await Promise.all([
+                const [merpRes, rsRes, sumRes, mcatRes, bsCompRes] = await Promise.all([
                   fetch(`${BRIDGE_HOST}:5007/overview`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ glid, AK: settings.authToken })
@@ -847,18 +847,6 @@ import { Coins } from 'lucide-react';
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ glId: glid })
                   }).then(r => r.ok ? r.json() : null),
-                  fetch(`${BRIDGE_HOST}:5002/services`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ glid, AK: settings.authToken })
-                  }).then(r => r.ok ? r.json() : null),
-                  fetch(`${BRIDGE_HOST}:5004/complaints`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ glId: glid })
-                  }).then(r => r.ok ? r.json() : null),
-                  fetch(`${BRIDGE_HOST}:5005/rating`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ glId: glid, AK: settings.authToken })
-                  }).then(r => r.ok ? r.json() : null),
                   fetch(`${BRIDGE_HOST}:5004/bs_complaints`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ glId: glid })
@@ -869,15 +857,6 @@ import { Coins } from 'lucide-react';
                 const rsData = rsRes || null;
                 const sumData = sumRes?.parsed_response?.top_bar_data?.[0] || null;
                 const mcatDataBatch = mcatRes?.mcat_data || [];
-                
-                // Process services
-                const srvDetails = srvRes?.data?.service_details || [];
-                const uniqueServices = Array.from(new Set(srvDetails.map((d: any) => d.SERVICE_NAME))) as string[];
-                let earliestDate = '-';
-                if (srvDetails.length > 0) {
-                  const sorted = srvDetails.sort((a: any, b: any) => parseMerpDate(a.STARTDATE) - parseMerpDate(b.STARTDATE));
-                  earliestDate = sorted[0].STARTDATE;
-                }
 
                 setSessionOverviews(prev => ({
                   ...prev,
@@ -886,10 +865,8 @@ import { Coins } from 'lucide-react';
                     redshift: rsData, 
                     summary: sumData, 
                     mcat: mcatDataBatch,
-                    services: { names: uniqueServices, paidSince: earliestDate },
-                    bsComplaints: compRes?.count || 0,
-                    supplierRating: ratRes?.avg_rating || 0,
-                    bs_extra: bsCompRes || null,
+                    latlong_status: bsCompRes?.latlong_status || 'Not Verified',
+                    address_status: bsCompRes?.address_status || 'Not Verified',
                     isComplete: true
                   }
                 }));
@@ -1634,27 +1611,90 @@ import { Coins } from 'lucide-react';
         const involvedRaw = await identifyInvolvedGLIDs(cslTableData, filteredMatchmakingData || [], settings.productName);
         const involved = Array.isArray(involvedRaw) ? involvedRaw.filter(i => i && i.glId) : [];
         
-        // Unblock UI immediately with basic data
-        const basicSuspects = involved.map(item => ({
-          ...item,
-          servicesAvailed: [],
-          paidSince: '-',
-          productMismatched: 'pending',
-          bsComplaints: null,
-          supplierRating: null
-        }));
+        const detailedSuspects = [];
+        const servicesLogMap: Record<string, any> = {};
+        const categoryLogMap: Record<string, any> = {};
+        const complaintsLogMap: Record<string, any> = {};
+        const ratingsLogMap: Record<string, any> = {};
 
+        for (let i = 0; i < involved.length; i++) {
+          const item = involved[i];
+          let servicesData: any = { servicesAvailed: [], paidSince: '-' };
+          let bsComplaints: number | null = null; 
+          let supplierRating: number | null = null;
+
+          // Fetch Active Services (5002)
+          try {
+            const srvRes = await fetch(`${BRIDGE_HOST}:5002/services`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ glid: item.glId, AK: settings.authToken })
+            });
+            if (srvRes.ok) {
+              const srvData = await srvRes.json();
+              servicesLogMap[item.glId] = srvData;
+              const details = srvData?.data?.service_details || [];
+              const uniqueServices = Array.from(new Set(details.map((d: any) => d.SERVICE_NAME))) as string[];
+              let earliestDate = '-';
+              if (details.length > 0) {
+                const sorted = details.sort((a: any, b: any) => parseMerpDate(a.STARTDATE) - parseMerpDate(b.STARTDATE));
+                earliestDate = sorted[0].STARTDATE;
+              }
+              servicesData = { servicesAvailed: uniqueServices, paidSince: earliestDate };
+            }
+          } catch {}
+
+          // Fetch BS Complaints (5004 - Redshift)
+          try {
+            const compRes = await fetch(`${BRIDGE_HOST}:5004/complaints`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ glId: item.glId })
+            });
+            if (compRes.ok) {
+              const compData = await compRes.json();
+              complaintsLogMap[item.glId] = compData;
+              bsComplaints = compData?.count !== undefined ? compData.count : 0;
+            } else { bsComplaints = 0; }
+          } catch { bsComplaints = 0; }
+
+          // Fetch Supplier Ratings (5005)
+          try {
+            const ratRes = await fetch(`${BRIDGE_HOST}:5005/rating`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ glId: item.glId, AK: settings.authToken })
+            });
+            if (ratRes.ok) {
+              const ratData = await ratRes.json();
+              ratingsLogMap[item.glId] = ratData;
+              supplierRating = ratData?.avg_rating !== undefined ? ratData.avg_rating : 0;
+            } else { supplierRating = 0; }
+          } catch { supplierRating = 0; }
+
+          detailedSuspects.push({
+            ...item,
+            ...servicesData,
+            productMismatched: 'pending',
+            bsComplaints: bsComplaints,
+            supplierRating: supplierRating
+          });
+        }
+
+        setRawServicesResponse(servicesLogMap);
+        setRawComplaintsResponse(complaintsLogMap);
+        setRawRatingsResponse(ratingsLogMap);
         clearInterval(progressTimer);
         setAnalysisProgress(100);
-        setInvolvedGLIDs(basicSuspects);
+        setInvolvedGLIDs(detailedSuspects);
         
         // Initialize mismatch status
         const initialStatus: Record<string, any> = {};
-        basicSuspects.forEach(s => { initialStatus[s.glId] = 'pending'; });
+        detailedSuspects.forEach(s => { initialStatus[s.glId] = 'pending'; });
         setMismatchAnalysisStatus(initialStatus);
         
         // runMismatchAnalysis still runs in background
-        runMismatchAnalysis(basicSuspects.map(s => s.glId));
+        runMismatchAnalysis(detailedSuspects.map(s => s.glId));
 
         setTimeout(() => setIsAnalyzingGLIDs(false), 500);
       } catch (err: any) {
