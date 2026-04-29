@@ -572,6 +572,47 @@ import { Coins } from 'lucide-react';
       return false;
     };
 
+    const getSuspectDetails = (glId: string, row: any) => {
+      const overview = sessionOverviews[glId];
+      const reasons: string[] = [];
+      if (!overview) return { score: 0, description: "Intelligence data pending...", flagsCount: 0 };
+
+      const merp = overview.merp;
+      const redshift = overview.redshift;
+      const summary = overview.summary;
+
+      // 1. PNS < 60%
+      const pnsRateStr = merp?.paid_company?.[0]?.PNS_rate;
+      const pnsRate = pnsRateStr ? parseFloat(pnsRateStr) : 100;
+      if (pnsRate < 60) reasons.push(`Low PNS Rate: ${pnsRate}% (< 60%)`);
+
+      // 2. HRS History Tickets >= 1
+      const hrsHistory = Number(redshift?.hrs_history || 0);
+      if (hrsHistory >= 1) reasons.push(`HRS History Tickets: ${hrsHistory} (>= 1)`);
+
+      // 3. Nach Bounce >= 1
+      const nachBounce = Number(redshift?.nach_bounce || 0);
+      if (nachBounce >= 1) reasons.push(`NACH Bounce: ${nachBounce} (>= 1)`);
+
+      // 4. Address not verified >= 1
+      const addrNotVerified = Number(redshift?.address_not_verified || 0);
+      if (addrNotVerified >= 1) reasons.push(`Address Not Verified (Count: ${addrNotVerified})`);
+
+      // 5. BL purchase frequency > 40 and LMS Replies < 10 in a month
+      const blFreq = Number(summary?.bl_lm || 0);
+      const lmsReplies = Number(summary?.qry_reply_lm || 0);
+      if (blFreq > 40 && lmsReplies < 10) reasons.push(`High BL Purchase (${blFreq} > 40) with Low LMS Replies (${lmsReplies} < 10)`);
+
+      // 6. BS complaints > 3
+      const bsComplaints = Number(row.bsComplaints || 0);
+      if (bsComplaints > 3) reasons.push(`BS Complaints: ${bsComplaints} (> 3)`);
+
+      const score = reasons.length > 0 ? Math.round((reasons.length / 6) * 100) : 0;
+      const description = reasons.length > 0 ? `Detected Flags: ${reasons.join(' | ')}` : "No system red-flags detected";
+
+      return { score, description, flagsCount: reasons.length };
+    };
+
     // Compute filtered matchmaking data based on contacts_add_date
     const filteredMatchmakingData = useMemo(() => {
       if (!matchmakingData) return null;
@@ -2750,6 +2791,7 @@ import { Coins } from 'lucide-react';
                                     <th className="px-8 py-6 border-r border-white/5 w-20 text-center">#</th>
                                     <th className="px-8 py-6 border-r border-white/5">Involved GL ID</th>
                                     <th className="px-8 py-6 border-r border-white/5">Company Name</th>
+                                    <th className="px-8 py-6 border-r border-white/5">Score</th>
                                     <th className="px-8 py-6 border-r border-white/5">Last Product</th>
                                     <th className="px-8 py-6 border-r border-white/5">Services</th>
                                     <th 
@@ -2802,6 +2844,31 @@ import { Coins } from 'lucide-react';
                                       </td>
                                       <td className="px-8 py-6 border-r border-slate-50 truncate max-w-[250px] group-hover:text-slate-900 font-black text-slate-700">
                                         {row.companyName || sessionOverviews[row.glId]?.merp?.glusr_data?.companyname || '-'}
+                                      </td>
+                                      <td className="px-8 py-6 border-r border-slate-50">
+                                        {(() => {
+                                          const details = getSuspectDetails(row.glId, row);
+                                          return (
+                                            <div 
+                                              className="flex items-center gap-2 cursor-help group/score" 
+                                              title={details.description}
+                                            >
+                                              <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex flex-col items-center justify-center group-hover/score:border-rose-200 group-hover/score:bg-rose-50 transition-all">
+                                                <span className={`text-[10px] font-black ${details.score > 50 ? 'text-rose-600' : details.score > 0 ? 'text-amber-600' : 'text-slate-400'}`}>
+                                                  {details.score}
+                                                </span>
+                                              </div>
+                                              <div className="flex flex-col">
+                                                <span className={`text-[9px] font-black uppercase tracking-tight ${details.score > 50 ? 'text-rose-500' : details.score > 0 ? 'text-amber-500' : 'text-slate-400'}`}>
+                                                  {details.score > 60 ? 'Critical' : details.score > 30 ? 'Moderate' : details.score > 0 ? 'Elevated' : 'Neutral'}
+                                                </span>
+                                                <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest leading-none">
+                                                  {details.flagsCount} System Flags
+                                                </span>
+                                              </div>
+                                            </div>
+                                          );
+                                        })()}
                                       </td>
                                       <td className="px-8 py-6 border-r border-slate-50 truncate max-w-[200px] group-hover:text-slate-900">{row.lastProductMatch || row.lastProduct || '-'}</td>
                                       <td className="px-8 py-6 border-r border-slate-50 group-hover:text-slate-900">
