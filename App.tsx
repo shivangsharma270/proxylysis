@@ -98,6 +98,31 @@ import { Coins } from 'lucide-react';
     });
     const [error, setError] = useState<string | null>(null);
     const [networkIp, setNetworkIp] = useState<string>('Detecting...');
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [authEmail, setAuthEmail] = useState('');
+    const [loginError, setLoginError] = useState('');
+
+    const hardcodedUsers = {
+      'rahul.singh@indiamart.com': '25672',
+      'shivangi.saxena1@indiamart.com': '113739',
+      'shivani.badoni@indiamart.com': '82394'
+    };
+
+    const handleLogin = (e: React.FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      const formData = new FormData(e.currentTarget);
+      const email = formData.get('email') as string;
+      const pass = formData.get('password') as string;
+      const emailLower = email.toLowerCase().trim();
+      
+      if (hardcodedUsers[emailLower as keyof typeof hardcodedUsers] === pass) {
+        setIsAuthenticated(true);
+        setAuthEmail(emailLower);
+        setLoginError('');
+      } else {
+        setLoginError('Invalid Email or Password');
+      }
+    };
 
     const columnSelectorRef = useRef<HTMLDivElement>(null);
     const [isColumnSelectorOpen, setIsColumnSelectorOpen] = useState(false);
@@ -1701,6 +1726,92 @@ import { Coins } from 'lucide-react';
 
     const isFullyOnline = backendStatus.csl && backendStatus.match && backendStatus.services && backendStatus.category && backendStatus.complaints && backendStatus.ratings && backendStatus.fraud && backendStatus.overview && backendStatus.summary && backendStatus.history;
 
+    if (!isAuthenticated) {
+      return (
+        <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 selection:bg-indigo-100 selection:text-indigo-900">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+            className="bg-white w-full max-w-md rounded-[3rem] shadow-[0_40px_100px_-15px_rgba(0,0,0,0.08)] border border-slate-200/60 overflow-hidden"
+          >
+            <div className="p-10 pt-14">
+              <div className="flex flex-col items-center mb-12">
+                <motion.div 
+                  whileHover={{ rotate: 0, scale: 1.05 }}
+                  initial={{ rotate: 3 }}
+                  className="bg-gradient-to-br from-indigo-600 to-violet-700 h-20 w-20 rounded-3xl flex items-center justify-center text-white shadow-2xl shadow-indigo-200 transition-all duration-500 mb-8"
+                >
+                  <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                </motion.div>
+                <h1 className="text-3xl font-black tracking-tight text-slate-900 uppercase">Proxylysis Login</h1>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] mt-3">Proxylysis Intel Network</p>
+              </div>
+
+              <form onSubmit={handleLogin} className="space-y-6">
+                <div className="space-y-2.5">
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Official Email</label>
+                  <div className="relative">
+                    <div className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M16 12a4 4 0 10-8 0 4 4 0 008 0zm0 0v1.5a2.5 2.5 0 005 0V12a9 9 0 10-9 9m4.5-1.206a8.959 8.959 0 01-4.5 1.206"></path></svg>
+                    </div>
+                    <input 
+                      name="email"
+                      type="email" 
+                      required
+                      placeholder="name@indiamart.com" 
+                      className="w-full bg-slate-50 border border-slate-200/80 rounded-[1.5rem] pl-14 pr-6 py-5 text-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all font-bold text-slate-700 placeholder:text-slate-300" 
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2.5">
+                  <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Password</label>
+                  <div className="relative">
+                    <div className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                    </div>
+                    <input 
+                      name="password"
+                      type="password" 
+                      required
+                      placeholder="••••••••" 
+                      className="w-full bg-slate-50 border border-slate-200/80 rounded-[1.5rem] pl-14 pr-6 py-5 text-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all font-bold text-slate-700 placeholder:text-slate-300" 
+                    />
+                  </div>
+                </div>
+
+                <AnimatePresence>
+                  {loginError && (
+                    <motion.div 
+                      initial={{ opacity: 0, height: 0, y: -10 }}
+                      animate={{ opacity: 1, height: 'auto', y: 0 }}
+                      exit={{ opacity: 0, height: 0, y: -10 }}
+                      className="bg-rose-50 border border-rose-100/60 text-rose-600 px-5 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-3"
+                    >
+                      <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                      {loginError}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                <button 
+                  type="submit"
+                  className="w-full py-5 bg-slate-900 hover:bg-black text-white rounded-[1.5rem] font-black text-xs uppercase tracking-[0.3em] shadow-[0_20px_40px_-10px_rgba(15,23,42,0.3)] transform transition-all active:scale-[0.98] hover:-translate-y-0.5"
+                >
+                  Verify Identity
+                </button>
+              </form>
+            </div>
+            <div className="bg-slate-50/80 p-8 border-t border-slate-100 flex flex-col items-center gap-2">
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.4em]">Proprietary Audit Technology</span>
+              <span className="text-[8px] font-bold text-indigo-400 uppercase tracking-widest">© 2026 IndiaMart InterMesh Ltd.</span>
+            </div>
+          </motion.div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-slate-50/50 text-slate-900 font-sans">
         {/* Sticky Top Bar */}
@@ -1815,6 +1926,23 @@ import { Coins } from 'lucide-react';
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
                   Report Fraud
                 </a>
+                <div className="h-8 w-px bg-slate-200 mx-2"></div>
+                <div className="flex items-center gap-3">
+                  <div className="flex flex-col items-end">
+                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Operator</span>
+                    <span className="text-[10px] font-bold text-slate-900 truncate max-w-[120px]">{authEmail.split('@')[0].replace('.', ' ')}</span>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      setIsAuthenticated(false);
+                      setAuthEmail('');
+                    }}
+                    className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all border border-transparent hover:border-rose-100 group"
+                    title="Logout"
+                  >
+                    <svg className="w-5 h-5 group-hover:scale-110 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
