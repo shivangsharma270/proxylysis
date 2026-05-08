@@ -287,6 +287,7 @@ import { Coins } from 'lucide-react';
     const [isSavingSession, setIsSavingSession] = useState(false);
     const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
     const [sessionOverviews, setSessionOverviews] = useState<Record<string, any>>({});
+    const [loadingGlids, setLoadingGlids] = useState<Set<string>>(new Set());
     const [additionalComments, setAdditionalComments] = useState('');
     const editorRef = useRef<HTMLDivElement>(null);
 
@@ -903,62 +904,7 @@ import { Coins } from 'lucide-react';
             
             // Check if we already have the core intelligence data
             if (!sessionOverviews[glid] || !sessionOverviews[glid].isComplete) {
-              try {
-                const [merpRes, rsRes, sumRes, mcatRes, bsCompRes] = await Promise.all([
-                  fetch(`${BRIDGE_HOST}:5007/overview`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ glid, AK: settings.authToken })
-                  }).then(r => r.ok ? r.json() : null),
-                  fetch(`${BRIDGE_HOST}:5004/redshift_overview`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ glId: glid })
-                  }).then(r => r.ok ? r.json() : null),
-                  fetch(`${BRIDGE_HOST}:5008/summary`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ glid })
-                  }).then(r => r.ok ? r.json() : null),
-                  fetch(`${BRIDGE_HOST}:5010/mcat`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ glId: glid })
-                  }).then(r => r.ok ? r.json() : null),
-                  fetch(`${BRIDGE_HOST}:5004/bs_complaints`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ glId: glid })
-                  }).then(r => r.ok ? r.json() : null)
-                ]);
-
-                const merpData = merpRes?.data || null;
-                const rsData = rsRes || null;
-                const sumData = sumRes?.parsed_response?.top_bar_data?.[0] || null;
-                const mcatDataBatch = mcatRes?.mcat_data || [];
-
-                setSessionOverviews(prev => ({
-                  ...prev,
-                  [glid]: { 
-                    merp: merpData, 
-                    redshift: rsData, 
-                    summary: sumData, 
-                    mcat: mcatDataBatch,
-                    latlong_status: bsCompRes?.latlong_status || 'Not Verified',
-                    address_status: bsCompRes?.address_status || 'Not Verified',
-                    isComplete: true
-                  }
-                }));
-
-                // Background tasks
-                if (merpData?.glusr_data) {
-                  searchOnlinePresence(
-                    merpData.glusr_data.companyname,
-                    `${merpData.glusr_data.address}, ${merpData.glusr_data.city}`,
-                    merpData?.gst_data?.[0]?.gst || '',
-                    merpData?.client_contact_numbers?.[0]?.value || ''
-                  ).then(presence => {
-                    setOnlinePresenceCache(prev => ({ ...prev, [glid]: presence }));
-                  }).catch(() => {});
-                }
-              } catch (e) {
-                console.error(`Background fetch failed for ${glid}`, e);
-              }
+              await fetchImmediateIntelligence(glid);
             }
           }
         };
@@ -978,11 +924,98 @@ import { Coins } from 'lucide-react';
       );
     };
 
+    const fetchImmediateIntelligence = async (glid: string) => {
+      setLoadingGlids(prev => new Set(prev).add(glid));
+      try {
+        const [merpRes, rsRes, sumRes, mcatRes, bsCompRes] = await Promise.all([
+          fetch(`${BRIDGE_HOST}:5007/overview`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ glid, AK: settings.authToken })
+          }).then(r => r.ok ? r.json() : null),
+          fetch(`${BRIDGE_HOST}:5004/redshift_overview`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ glId: glid })
+          }).then(r => r.ok ? r.json() : null),
+          fetch(`${BRIDGE_HOST}:5008/summary`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ glid })
+          }).then(r => r.ok ? r.json() : null),
+          fetch(`${BRIDGE_HOST}:5010/mcat`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ glId: glid })
+          }).then(r => r.ok ? r.json() : null),
+          fetch(`${BRIDGE_HOST}:5004/bs_complaints`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ glId: glid })
+          }).then(r => r.ok ? r.json() : null)
+        ]);
+
+        const merpData = merpRes?.data || null;
+        const rsData = rsRes || null;
+        const sumData = sumRes?.parsed_response?.top_bar_data?.[0] || null;
+        const mcatDataBatch = mcatRes?.mcat_data || [];
+
+        const updatedOverview = { 
+          merp: merpData, 
+          redshift: rsData, 
+          summary: sumData, 
+          mcat: mcatDataBatch,
+          latlong_status: bsCompRes?.latlong_status || 'Not Verified',
+          address_status: bsCompRes?.address_status || 'Not Verified',
+          isComplete: true
+        };
+
+        setSessionOverviews(prev => ({
+          ...prev,
+          [glid]: updatedOverview
+        }));
+
+        // Backfill individual state if this is the currently selected GLID
+        if (selectedGlId === glid || (isOverviewPaneOpen && !selectedGlId)) {
+          setCompanyOverviewData(merpData);
+          setRedshiftOverviewData(rsData);
+          setTopBarSummaryData(sumData);
+          setMcatData(mcatDataBatch);
+          setLatlongStatusData(updatedOverview.latlong_status);
+          setAddressStatusData(updatedOverview.address_status);
+          setIsMerpLoading(false);
+          setIsRedshiftLoading(false);
+          setIsSummaryLoading(false);
+          setIsMcatLoading(false);
+          setIsLatlongLoading(false);
+        }
+
+        // Background online presence search
+        if (merpData?.glusr_data) {
+          searchOnlinePresence(
+            merpData.glusr_data.companyname,
+            `${merpData.glusr_data.address}, ${merpData.glusr_data.city}`,
+            merpData?.gst_data?.[0]?.gst || '',
+            merpData?.client_contact_numbers?.[0]?.value || ''
+          ).then(presence => {
+            setOnlinePresenceCache(prev => ({ ...prev, [glid]: presence }));
+          }).catch(() => {});
+        }
+
+        return updatedOverview;
+      } catch (e) {
+        console.error(`Fetch failed for ${glid}`, e);
+        return null;
+      } finally {
+        setLoadingGlids(prev => {
+          const next = new Set(prev);
+          next.delete(glid);
+          return next;
+        });
+      }
+    };
+
     const fetchCompanyOverview = async (glid: string) => {
       setSelectedGlId(glid);
       setIsOverviewPaneOpen(true);
       
-      if (sessionOverviews[glid]) {
+      // If already complete, just show it
+      if (sessionOverviews[glid] && sessionOverviews[glid].isComplete) {
         setCompanyOverviewData(sessionOverviews[glid].merp);
         setRedshiftOverviewData(sessionOverviews[glid].redshift);
         setTopBarSummaryData(sessionOverviews[glid].summary);
@@ -992,194 +1025,19 @@ import { Coins } from 'lucide-react';
         setIsMerpLoading(false);
         setIsRedshiftLoading(false);
         setIsSummaryLoading(false);
+        setIsMcatLoading(false);
         setIsLatlongLoading(false);
-        
-        // Trigger presence if not cached
-        const data = sessionOverviews[glid].merp;
-        if (!onlinePresenceCache[glid] && data?.glusr_data) {
-          const glusrData = data.glusr_data;
-          setIsPresenceLoading(true);
-          searchOnlinePresence(
-            glusrData.companyname,
-            `${glusrData.address}, ${glusrData.city}`,
-            data?.gst_data?.[0]?.gst || '',
-            data?.client_contact_numbers?.[0]?.value || ''
-          ).then(presence => {
-            setOnlinePresenceCache(prev => ({ ...prev, [glid]: presence }));
-          }).catch(console.error).finally(() => setIsPresenceLoading(false));
-        }
         return;
       }
 
-      // Reset states for fresh fetch
-      setCompanyOverviewData(null);
-      setRedshiftOverviewData(null);
-      setTopBarSummaryData(null);
-      setMcatData(null);
-      
+      // Fetch immediately
       setIsMerpLoading(true);
       setIsRedshiftLoading(true);
       setIsSummaryLoading(true);
       setIsMcatLoading(true);
       setIsLatlongLoading(true);
-      setLatlongStatusData(null);
-      setAddressStatusData(null);
-
-      // 1. Fetch MERP Overview
-      fetch(`${BRIDGE_HOST}:5007/overview`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ glid, AK: settings.authToken })
-      })
-      .then(res => res.json())
-      .then(async (overviewData) => {
-        const data = overviewData?.data || null;
-        setCompanyOverviewData(data);
-        setIsMerpLoading(false);
-
-        // Update Session Overviews Cache
-        setSessionOverviews(prev => ({
-          ...prev,
-          [glid]: {
-            ...prev[glid],
-            merp: data
-          }
-        }));
-
-        // Trigger Online Presence search as soon as we have company details
-        const glusrData = data?.glusr_data;
-        if (!onlinePresenceCache[glid] && glusrData) {
-          setIsPresenceLoading(true);
-          try {
-            const presence = await searchOnlinePresence(
-              glusrData.companyname,
-              `${glusrData.address}, ${glusrData.city}`,
-              data?.gst_data?.[0]?.gst || '',
-              data?.client_contact_numbers?.[0]?.value || ''
-            );
-            setOnlinePresenceCache(prev => ({ ...prev, [glid]: presence }));
-          } catch (err) {
-            console.error("Presence Search Error:", err);
-          } finally {
-            setIsPresenceLoading(false);
-          }
-        }
-      })
-      .catch(err => {
-        console.error("MERP Error:", err);
-        setIsMerpLoading(false);
-      });
-
-      // 2. Fetch Redshift Overview Metrics
-      fetch(`${BRIDGE_HOST}:5004/redshift_overview`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ glId: glid })
-      })
-      .then(res => {
-        if (!res.ok) return res.json().then(err => { throw new Error(err.error || 'Redshift Fetch Failed') });
-        return res.json();
-      })
-      .then(redshiftData => {
-        console.log(`[*] Redshift Overview Data for ${glid}:`, redshiftData);
-        setRedshiftOverviewData(redshiftData || null);
-        setIsRedshiftLoading(false);
-
-        // Update Session Overviews Cache
-        setSessionOverviews(prev => ({
-          ...prev,
-          [glid]: {
-            ...prev[glid],
-            redshift: redshiftData
-          }
-        }));
-      })
-      .catch(err => {
-        console.error("Redshift Error:", err);
-        setError(`Redshift Error: ${err.message}`);
-        setIsRedshiftLoading(false);
-      });
-
-      // 3. Fetch Top Bar Summary
-      fetch(`${BRIDGE_HOST}:5008/summary`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ glid })
-      })
-      .then(res => res.json())
-      .then(summaryData => {
-        const summary = summaryData?.parsed_response?.top_bar_data?.[0] || null;
-        setTopBarSummaryData(summary);
-        setIsSummaryLoading(false);
-
-        // Update Session Overviews Cache
-        setSessionOverviews(prev => ({
-          ...prev,
-          [glid]: {
-            ...prev[glid],
-            summary: summary
-          }
-        }));
-      })
-      .catch(err => {
-        console.error("Summary Error:", err);
-        setIsSummaryLoading(false);
-      });
-
-      // 3.5 Fetch MCAT Data
-      fetch(`${BRIDGE_HOST}:5010/mcat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ glId: glid })
-      })
-      .then(res => res.json())
-      .then(mcatRes => {
-        const mcat = mcatRes.mcat_data || [];
-        setMcatData(mcat);
-        setIsMcatLoading(false);
-
-        // Update Session Overviews Cache
-        setSessionOverviews(prev => ({
-          ...prev,
-          [glid]: {
-            ...prev[glid],
-            mcat: mcat
-          }
-        }));
-      })
-      .catch(err => {
-        console.error("MCAT Error:", err);
-        setIsMcatLoading(false);
-      });
-
-      // 4. Fetch LatLong Status
-      fetch(`${BRIDGE_HOST}:5004/bs_complaints`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ glId: glid })
-      })
-      .then(res => res.json())
-      .then(data => {
-        const latlongStatus = data.latlong_status || 'Not Verified';
-        const addressStatus = data.address_status || 'Not Verified';
-        setLatlongStatusData(latlongStatus);
-        setAddressStatusData(addressStatus);
-        setIsLatlongLoading(false);
-
-        // Update Session Overviews Cache
-        setSessionOverviews(prev => ({
-          ...prev,
-          [glid]: {
-            ...prev[glid],
-            latlong_status: latlongStatus,
-            address_status: addressStatus
-          }
-        }));
-      })
-      .catch(err => {
-        console.error("LatLong Error:", err);
-        setIsLatlongLoading(false);
-      });
+      
+      await fetchImmediateIntelligence(glid);
     };
 
     const unformatDateValue = (val: any) => {
@@ -2782,6 +2640,12 @@ import { Coins } from 'lucide-react';
                                         >
                                           {row.glId}
                                         </button>
+                                        {loadingGlids.has(row.glId) && (
+                                          <div className="mt-1 flex items-center gap-1.5 animate-pulse">
+                                            <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full"></div>
+                                            <span className="text-[8px] font-black text-indigo-400 uppercase tracking-widest">Refreshing...</span>
+                                          </div>
+                                        )}
                                       </td>
                                       <td className="px-8 py-6 border-r border-slate-50 truncate max-w-[250px] group-hover:text-slate-900 font-black text-slate-700">
                                         {row.companyName || sessionOverviews[row.glId]?.merp?.glusr_data?.companyname || '-'}
