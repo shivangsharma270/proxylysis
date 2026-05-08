@@ -49,6 +49,7 @@
     "electron": "^41.0.3",
     "electron-builder": "^26.8.1",
     "express": "^5.2.1",
+    "firebase": "^12.13.0",
     "framer-motion": "^12.34.5",
     "jszip": "^3.10.1",
     "lucide-react": "^0.576.0",

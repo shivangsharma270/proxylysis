@@ -1,0 +1,39 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() <= 128;
+    }
+
+    // Sessions Collection
+    match /sessions/{sessionId} {
+      // Allow read/list so users can see history
+      allow read: if true;
+      
+      // Allow creation/updates for all associates
+      // In a production app, we would restrict this to authenticated users
+      allow create, update: if isValidId(sessionId);
+      
+      // Allow deletion
+      allow delete: if true;
+    }
+
+    // Users (Associate Credentials) Collection
+    match /users/{email} {
+      // Allow single document 'get' for login verification
+      allow get: if isValidId(email);
+      
+      // Admin management: Ideally restricted to the master admin email
+      // For the purpose of this setup, we enable writes so the admin panel can work
+      allow list, create, update, delete: if true;
+    }
+  }
+}
+

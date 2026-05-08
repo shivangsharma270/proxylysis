@@ -1,6 +1,8 @@
   import React, { useState, useEffect, useRef, useMemo } from 'react';
   import JSZip from 'jszip';
   import * as XLSX from 'xlsx';
+  import { db, auth } from './src/lib/firebase';
+  import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, User } from 'firebase/auth';
   import { Bold, Italic, Underline, List, ListOrdered, Image as ImageIcon, Trash2, Type, Link as LinkIcon, Eraser, ArrowUpDown } from 'lucide-react';
   import { motion, AnimatePresence } from 'framer-motion';
   import { AgentSettings } from './types.ts';
@@ -51,7 +53,7 @@ import { Coins } from 'lucide-react';
     const [isSummaryLoading, setIsSummaryLoading] = useState(false);
     const [isMcatLoading, setIsMcatLoading] = useState(false);
     const [isLatlongLoading, setIsLatlongLoading] = useState(false);
-    const [isOverviewPaneOpen, setIsOverviewPaneOpen] = useState(false);
+    const [isAddressLoading, setIsAddressLoading] = useState(false);
 
     // Mismatch Analysis State
     const [mismatchAnalysisStatus, setMismatchAnalysisStatus] = useState<Record<string, 'pending' | 'processing' | 'Mismatch Found' | 'No Mismatch'>>({});
@@ -99,15 +101,86 @@ import { Coins } from 'lucide-react';
     });
     const [error, setError] = useState<string | null>(null);
     const [networkIp, setNetworkIp] = useState<string>('Detecting...');
+    
+    // UI Modal & Navigation State
+    const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+    const [isAdminDashboardOpen, setIsAdminDashboardOpen] = useState(false);
+    const [isTokenAnalysisOpen, setIsTokenAnalysisOpen] = useState(false);
+    const [isOverviewPaneOpen, setIsOverviewPaneOpen] = useState(false);
+    const [isStreamsVisible, setIsStreamsVisible] = useState(false);
+    const [isFileListModalOpen, setIsFileListModalOpen] = useState(false);
+    const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+
     const [isAuthenticated, setIsAuthenticated] = useState(() => {
       return localStorage.getItem('proxy_auth_status') === 'true';
     });
     const [authEmail, setAuthEmail] = useState(() => {
       return localStorage.getItem('proxy_auth_email') || '';
     });
+    const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
+
     const [isAdmin, setIsAdmin] = useState(() => {
       return localStorage.getItem('proxy_admin_status') === 'true';
     });
+    const [associates, setAssociates] = useState<any[]>([]);
+    const [isAssociatesLoading, setIsAssociatesLoading] = useState(false);
+    const [newAssociateEmail, setNewAssociateEmail] = useState('');
+    const [newAssociatePassword, setNewAssociatePassword] = useState('');
+
+    const fetchAssociates = async () => {
+      if (!isAdmin) return;
+      setIsAssociatesLoading(true);
+      try {
+        const { getDocs, collection } = await import('firebase/firestore');
+        const querySnapshot = await getDocs(collection(db, 'users'));
+        const list: any[] = [];
+        querySnapshot.forEach((doc) => {
+          list.push({ id: doc.id, ...doc.data() });
+        });
+        setAssociates(list);
+      } catch (err) {
+        console.error("Failed to fetch associates:", err);
+      } finally {
+        setIsAssociatesLoading(false);
+      }
+    };
+
+    useEffect(() => {
+      if (isAdminDashboardOpen && isAdmin) {
+        fetchAssociates();
+      }
+    }, [isAdminDashboardOpen, isAdmin]);
+
+    const handleCreateAssociate = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!newAssociateEmail || !newAssociatePassword) return;
+      try {
+        const { setDoc, doc } = await import('firebase/firestore');
+        const associateId = newAssociateEmail.toLowerCase().trim();
+        await setDoc(doc(db, 'users', associateId), {
+          email: associateId,
+          password: newAssociatePassword,
+          role: 'associate',
+          created_at: new Date().toISOString()
+        });
+        setNewAssociateEmail('');
+        setNewAssociatePassword('');
+        fetchAssociates();
+      } catch (err: any) {
+        alert("Failed to create associate: " + err.message);
+      }
+    };
+
+    const handleDeleteAssociate = async (email: string) => {
+      if (!window.confirm(`Delete associate ${email}?`)) return;
+      try {
+        const { deleteDoc, doc } = await import('firebase/firestore');
+        await deleteDoc(doc(db, 'users', email));
+        fetchAssociates();
+      } catch (err: any) {
+        alert("Failed to delete associate: " + err.message);
+      }
+    };
     const [loginError, setLoginError] = useState('');
     const [showAdminLogin, setShowAdminLogin] = useState(false);
     const [adminStartDate, setAdminStartDate] = useState(() => {
@@ -145,22 +218,18 @@ import { Coins } from 'lucide-react';
 
     const ADMIN_CREDENTIALS = {
       email: 'proxylysis@indiamart.com',
-      password: 'indiamart@123'
+      password: 'proxylysis@i123'
     };
 
-    const hardcodedUsers = {
-      'rahul.singh@indiamart.com': '25672',
-      'shivangi.saxena1@indiamart.com': '113739',
-      'shivani.badoni@indiamart.com': '82394'
-    };
-
-    const handleLogin = (e: React.FormEvent<HTMLFormElement>) => {
+    const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
       e.preventDefault();
       const formData = new FormData(e.currentTarget);
       const email = formData.get('email') as string;
       const pass = formData.get('password') as string;
       const emailLower = email.toLowerCase().trim();
       
+      setLoginError('');
+
       if (showAdminLogin) {
         if (emailLower === ADMIN_CREDENTIALS.email && pass === ADMIN_CREDENTIALS.password) {
           setIsAuthenticated(true);
@@ -169,32 +238,40 @@ import { Coins } from 'lucide-react';
           localStorage.setItem('proxy_auth_status', 'true');
           localStorage.setItem('proxy_auth_email', emailLower);
           localStorage.setItem('proxy_admin_status', 'true');
-          setLoginError('');
         } else {
-          setLoginError('Invalid Admin Credentials');
+          setLoginError("Invalid Administrator Credentials");
         }
-        return;
-      }
-
-      if (hardcodedUsers[emailLower as keyof typeof hardcodedUsers] === pass) {
-        setIsAuthenticated(true);
-        setIsAdmin(false);
-        setAuthEmail(emailLower);
-        localStorage.setItem('proxy_auth_status', 'true');
-        localStorage.setItem('proxy_auth_email', emailLower);
-        localStorage.setItem('proxy_admin_status', 'false');
-        setLoginError('');
       } else {
-        setLoginError('Invalid Email or Password');
+        // Associate Login via Firestore
+        try {
+          const { getDoc, doc } = await import('firebase/firestore');
+          const userDoc = await getDoc(doc(db, 'users', emailLower));
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            if (userData.password === pass) {
+              setIsAuthenticated(true);
+              setIsAdmin(userData.role === 'admin');
+              setAuthEmail(emailLower);
+              localStorage.setItem('proxy_auth_status', 'true');
+              localStorage.setItem('proxy_auth_email', emailLower);
+              if (userData.role === 'admin') {
+                localStorage.setItem('proxy_admin_status', 'true');
+              }
+            } else {
+              setLoginError("Invalid Security Pin");
+            }
+          } else {
+            setLoginError("Email not registered in the system");
+          }
+        } catch (err: any) {
+          setLoginError("Authentication server error: " + err.message);
+        }
       }
     };
 
     const columnSelectorRef = useRef<HTMLDivElement>(null);
     const [isColumnSelectorOpen, setIsColumnSelectorOpen] = useState(false);
 
-    const [isStreamsVisible, setIsStreamsVisible] = useState(false);
-    const [isFileListModalOpen, setIsFileListModalOpen] = useState(false);
-    const [isExportModalOpen, setIsExportModalOpen] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
     const [exportOptions, setExportOptions] = useState({
       initialParameters: true,
@@ -205,9 +282,6 @@ import { Coins } from 'lucide-react';
     });
     const [selectedSuspectGLIDs, setSelectedSuspectGLIDs] = useState<string[]>([]);
     
-    const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
-    const [isAdminDashboardOpen, setIsAdminDashboardOpen] = useState(false);
-    const [isTokenAnalysisOpen, setIsTokenAnalysisOpen] = useState(false);
     const [historySearchTerm, setHistorySearchTerm] = useState('');
     const [isHistoryLoading, setIsHistoryLoading] = useState(false);
     const [isSavingSession, setIsSavingSession] = useState(false);
@@ -1788,6 +1862,7 @@ import { Coins } from 'lucide-react';
                 >
                   {showAdminLogin ? 'Access Control' : 'Verify Identity'}
                 </button>
+
               </form>
 
               {!showAdminLogin ? (
@@ -1957,9 +2032,11 @@ import { Coins } from 'lucide-react';
                   </div>
                   <button 
                     onClick={() => {
+                      signOut(auth);
                       setIsAuthenticated(false);
                       setIsAdmin(false);
                       setAuthEmail('');
+                      setFirebaseUser(null);
                       localStorage.removeItem('proxy_auth_status');
                       localStorage.removeItem('proxy_auth_email');
                       localStorage.removeItem('proxy_admin_status');
@@ -1997,11 +2074,11 @@ import { Coins } from 'lucide-react';
                 </div>
                 <form onSubmit={handleFetch} className="flex flex-col gap-5">
                   <div className="space-y-2">
-                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">GLusr_ID</label>
+                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Buyer's GL USER ID</label>
                     <input type="text" value={settings.glId} onChange={e => setSettings({...settings, glId: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 text-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all font-bold text-slate-700" />
                   </div>
                   <div className="space-y-2">
-                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Product Name (q)</label>
+                    <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Disputed Product Name</label>
                     <input type="text" placeholder="e.g. Solar Panels" value={settings.productName} onChange={e => setSettings({...settings, productName: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-5 py-3 text-sm focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all font-bold text-slate-700" />
                   </div>
                   <div className="space-y-2">
@@ -2400,11 +2477,11 @@ import { Coins } from 'lucide-react';
                         {cslTableData !== null ? (
                           <>
                             <table className="w-full text-left border-collapse" style={{ minWidth: `${(visibleCslColumns.length * 180) + 64}px` }}>
-                              <thead className="sticky top-0 z-10 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[11px] font-black uppercase tracking-widest">
+                              <thead className="sticky top-0 z-20 bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[11px] font-black uppercase tracking-widest shadow-sm">
                                 <tr>
-                                  <th className="px-6 py-4 border-r border-white/10 text-center w-20">#</th>
+                                  <th className="sticky top-0 px-6 py-4 border-r border-white/10 text-center w-20 bg-inherit">#</th>
                                   {cslParameters.map((param) => visibleCslColumns.includes(param) && (
-                                    <th key={param} className="px-6 py-4 border-r border-white/10 whitespace-nowrap">{param}</th>
+                                    <th key={param} className="sticky top-0 px-6 py-4 border-r border-white/10 whitespace-nowrap bg-inherit">{param}</th>
                                   ))}
                                 </tr>
                               </thead>
@@ -3761,6 +3838,109 @@ import { Coins } from 'lucide-react';
                               </Bar>
                             </BarChart>
                           </ResponsiveContainer>
+                        </div>
+                      </div>
+
+                      {/* Associate Access Management */}
+                      <div className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm">
+                        <div className="flex items-center justify-between mb-8">
+                          <div className="flex items-center gap-4">
+                            <div className="p-3 bg-slate-900 rounded-2xl shadow-lg shadow-slate-200">
+                              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+                            </div>
+                            <div>
+                              <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Associate Access Management</h3>
+                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Manage Credentials & System Access</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
+                          {/* Create New Associate */}
+                          <div className="bg-slate-50 p-8 rounded-3xl border border-slate-100 h-fit">
+                            <h4 className="text-[10px] font-black text-slate-900 uppercase tracking-widest mb-6 flex items-center gap-2">
+                              <span className="w-1.5 h-1.5 rounded-full bg-indigo-500"></span>
+                              Enroll New Associate
+                            </h4>
+                            <form onSubmit={handleCreateAssociate} className="space-y-4">
+                              <div className="space-y-2">
+                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Email ID</label>
+                                <input 
+                                  type="email" 
+                                  value={newAssociateEmail}
+                                  onChange={(e) => setNewAssociateEmail(e.target.value)}
+                                  placeholder="associate@indiamart.com"
+                                  className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-3 text-xs focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all font-bold text-slate-700" 
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Security PIN / Password</label>
+                                <input 
+                                  type="password" 
+                                  value={newAssociatePassword}
+                                  onChange={(e) => setNewAssociatePassword(e.target.value)}
+                                  placeholder="Enter Secure Password"
+                                  className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-3 text-xs focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none transition-all font-bold text-slate-700" 
+                                />
+                              </div>
+                              <button 
+                                type="submit"
+                                className="w-full py-4 bg-indigo-600 hover:bg-slate-900 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-indigo-100 transition-all active:scale-[0.98]"
+                              >
+                                Authorize Enrollment
+                              </button>
+                            </form>
+                          </div>
+
+                          {/* Active Access List */}
+                          <div className="lg:col-span-2 border border-slate-100 rounded-3xl overflow-hidden shadow-sm bg-white">
+                            <table className="w-full text-left">
+                              <thead className="bg-slate-50 border-b border-slate-100">
+                                <tr className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                                  <th className="px-6 py-4">Associate Email</th>
+                                  <th className="px-6 py-4">Enrollment Date</th>
+                                  <th className="px-6 py-4 text-center">Status</th>
+                                  <th className="px-6 py-4 text-right">Actions</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-50 text-[10px] font-bold text-slate-600">
+                                {isAssociatesLoading ? (
+                                  <tr>
+                                    <td colSpan={4} className="px-6 py-10 text-center text-slate-300 font-black uppercase tracking-widest">Retrieving Command Access List...</td>
+                                  </tr>
+                                ) : associates.length === 0 ? (
+                                  <tr>
+                                    <td colSpan={4} className="px-6 py-10 text-center text-slate-300 font-black uppercase tracking-widest">No Active Enrollments Found</td>
+                                  </tr>
+                                ) : (
+                                  associates.map((associate) => (
+                                    <tr key={associate.id} className="hover:bg-slate-50/50 transition-colors group">
+                                      <td className="px-6 py-4">
+                                        <div className="flex flex-col">
+                                          <span className="text-slate-900">{associate.email}</span>
+                                          <span className="text-[8px] text-indigo-400 uppercase tracking-widest mt-0.5">{associate.role}</span>
+                                        </div>
+                                      </td>
+                                      <td className="px-6 py-4 text-slate-400">
+                                        {associate.created_at ? new Date(associate.created_at).toLocaleDateString() : 'Historical'}
+                                      </td>
+                                      <td className="px-6 py-4 text-center">
+                                        <span className="bg-emerald-50 text-emerald-600 px-3 py-1 rounded-full text-[8px] font-black uppercase">Active</span>
+                                      </td>
+                                      <td className="px-6 py-4 text-right">
+                                        <button 
+                                          onClick={() => handleDeleteAssociate(associate.id)}
+                                          className="p-2 text-rose-300 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
+                                        >
+                                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  ))
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
                         </div>
                       </div>
 
