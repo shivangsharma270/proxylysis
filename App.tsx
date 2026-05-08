@@ -9,7 +9,6 @@
   import { identifyInvolvedGLIDs, analyzeProductMismatch, searchOnlinePresence, scanDocumentsWithGemini } from './services/geminiService.ts';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 import { historyService } from './services/historyService.ts';
-import { configService, RedFlagConfig } from './services/configService.ts';
 import TokenAnalysis from './components/TokenAnalysis.tsx';
 import { Coins } from 'lucide-react';
 
@@ -127,30 +126,6 @@ import { Coins } from 'lucide-react';
     const [isAssociatesLoading, setIsAssociatesLoading] = useState(false);
     const [newAssociateEmail, setNewAssociateEmail] = useState('');
     const [newAssociatePassword, setNewAssociatePassword] = useState('');
-    
-    // Red Flag Configuration State
-    const [redFlags, setRedFlags] = useState<RedFlagConfig>(configService.getDefaults());
-    const [isSavingFlags, setIsSavingFlags] = useState(false);
-
-    const fetchFlagConfig = async () => {
-      const config = await configService.getFlags();
-      if (config) {
-        setRedFlags(prev => ({ ...prev, ...config }));
-      }
-    };
-
-    const handleSaveFlags = async () => {
-      setIsSavingFlags(true);
-      try {
-        await configService.saveFlags(redFlags, authEmail);
-        alert("Red flag parameters updated successfully!");
-      } catch (err) {
-        console.error("Failed to save red flags:", err);
-        alert("Failed to save changes. Please check console.");
-      } finally {
-        setIsSavingFlags(false);
-      }
-    };
 
     const fetchAssociates = async () => {
       if (!isAdmin) return;
@@ -173,13 +148,8 @@ import { Coins } from 'lucide-react';
     useEffect(() => {
       if (isAdminDashboardOpen && isAdmin) {
         fetchAssociates();
-        fetchFlagConfig();
       }
     }, [isAdminDashboardOpen, isAdmin]);
-
-    useEffect(() => {
-      fetchFlagConfig();
-    }, []);
 
     const handleCreateAssociate = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -693,33 +663,31 @@ import { Coins } from 'lucide-react';
       const redshift = overview.redshift;
       const summary = overview.summary;
 
-      // 1. PNS Rate
+      // 1. PNS < 60%
       const pnsRateStr = merp?.paid_company?.[0]?.PNS_rate;
       const pnsRate = pnsRateStr ? parseFloat(pnsRateStr) : 100;
-      if (pnsRate < redFlags.pnsRateThreshold) reasons.push(`Low PNS Rate: ${pnsRate}% (< ${redFlags.pnsRateThreshold}%)`);
- 
-      // 2. HRS History Tickets
+      if (pnsRate < 60) reasons.push(`Low PNS Rate: ${pnsRate}% (< 60%)`);
+
+      // 2. HRS History Tickets >= 1
       const hrsHistory = Number(redshift?.hrs_history || 0);
-      if (hrsHistory >= redFlags.hrsHistoryThreshold) reasons.push(`HRS History Tickets: ${hrsHistory} (>= ${redFlags.hrsHistoryThreshold})`);
- 
-      // 3. Nach Bounce
+      if (hrsHistory >= 1) reasons.push(`HRS History Tickets: ${hrsHistory} (>= 1)`);
+
+      // 3. Nach Bounce >= 1
       const nachBounce = Number(redshift?.nach_bounce || 0);
-      if (nachBounce >= redFlags.nachBounceThreshold) reasons.push(`NACH Bounce: ${nachBounce} (>= ${redFlags.nachBounceThreshold})`);
- 
-      // 4. Address not verified
+      if (nachBounce >= 1) reasons.push(`NACH Bounce: ${nachBounce} (>= 1)`);
+
+      // 4. Address not verified >= 1
       const addrNotVerified = Number(redshift?.address_not_verified || 0);
-      if (addrNotVerified >= redFlags.addressNotVerifiedThreshold) reasons.push(`Address Not Verified (Count: ${addrNotVerified} >= ${redFlags.addressNotVerifiedThreshold})`);
- 
-      // 5. BL purchase frequency and LMS Replies
+      if (addrNotVerified >= 1) reasons.push(`Address Not Verified (Count: ${addrNotVerified})`);
+
+      // 5. BL purchase frequency > 40 and LMS Replies < 10 in a month
       const blFreq = Number(summary?.bl_lm || 0);
       const lmsReplies = Number(summary?.qry_reply_lm || 0);
-      if (blFreq > redFlags.blPurchaseThreshold && lmsReplies < redFlags.lmsReplyThreshold) {
-        reasons.push(`High BL Purchase (${blFreq} > ${redFlags.blPurchaseThreshold}) with Low LMS Replies (${lmsReplies} < ${redFlags.lmsReplyThreshold})`);
-      }
- 
-      // 6. BS complaints
+      if (blFreq > 40 && lmsReplies < 10) reasons.push(`High BL Purchase (${blFreq} > 40) with Low LMS Replies (${lmsReplies} < 10)`);
+
+      // 6. BS complaints > 3
       const bsComplaintsCount = overview.bsComplaints !== undefined ? overview.bsComplaints : Number(row.bsComplaints || 0);
-      if (bsComplaintsCount > redFlags.bsComplaintsThreshold) reasons.push(`BS Complaints: ${bsComplaintsCount} (> ${redFlags.bsComplaintsThreshold})`);
+      if (bsComplaintsCount > 3) reasons.push(`BS Complaints: ${bsComplaintsCount} (> 3)`);
 
       const score = reasons.length > 0 ? Math.round((reasons.length / 6) * 100) : 0;
       const description = reasons.length > 0 ? `Detected Flags: ${reasons.join(' | ')}` : "No system red-flags detected";
@@ -3973,56 +3941,6 @@ import { Coins } from 'lucide-react';
                               </tbody>
                             </table>
                           </div>
-                        </div>
-                      </div>
-
-                      {/* Red Flag Intelligence Configuration */}
-                      <div className="bg-white p-10 rounded-[3rem] border border-slate-200 shadow-sm">
-                        <div className="flex items-center justify-between mb-8">
-                          <div className="flex items-center gap-4">
-                            <div className="p-3 bg-rose-600 rounded-2xl shadow-lg shadow-rose-200">
-                              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9"></path></svg>
-                            </div>
-                            <div>
-                              <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Red Flag Intelligence Configuration</h3>
-                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">Set Score Weights & Violation Thresholds</p>
-                            </div>
-                          </div>
-                          <button 
-                            onClick={handleSaveFlags}
-                            disabled={isSavingFlags}
-                            className={`flex items-center gap-2 px-6 py-3 ${isSavingFlags ? 'bg-slate-400' : 'bg-rose-600 hover:bg-rose-700'} rounded-xl transition-all text-[10px] font-black uppercase tracking-widest text-white shadow-xl shadow-rose-500/20`}
-                          >
-                            {isSavingFlags ? 'Committing Changes...' : 'Save Configuration'}
-                          </button>
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                           {[
-                             { id: 'pnsRateThreshold', label: 'PNS Rate Threshold (%)', icon: 'M13 7h8m0 0v8m0-8l-8 8-4-4-6 6', desc: 'Flag if PNS is below this' },
-                             { id: 'hrsHistoryThreshold', label: 'HRS History (Count)', icon: 'M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z', desc: 'Flag if history is >= this' },
-                             { id: 'nachBounceThreshold', label: 'NACH Bounce (Count)', icon: 'M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z', desc: 'Flag if bounce is >= this' },
-                             { id: 'addressNotVerifiedThreshold', label: 'Addr Not Verified', icon: 'M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z', desc: 'Flag if count is >= this' },
-                             { id: 'blPurchaseThreshold', label: 'BL Purchase Target', icon: 'M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z', desc: 'Flag if purchase > this' },
-                             { id: 'lmsReplyThreshold', label: 'LMS Reply Floor', icon: 'M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z', desc: 'Flag if replies < this' },
-                             { id: 'bsComplaintsThreshold', label: 'BS Complaints Cap', icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z', desc: 'Flag if complaints > this' }
-                           ].map((item) => (
-                             <div key={item.id} className="bg-slate-50 p-6 rounded-3xl border border-slate-100 transition-all hover:border-rose-200 group">
-                               <div className="flex items-center gap-3 mb-4">
-                                 <div className="p-2 bg-white text-rose-600 rounded-xl shadow-sm border border-slate-100">
-                                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={item.icon}></path></svg>
-                                 </div>
-                                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{item.label}</span>
-                               </div>
-                               <input 
-                                 type="number"
-                                 value={(redFlags as any)[item.id]}
-                                 onChange={(e) => setRedFlags({...redFlags, [item.id]: Number(e.target.value)})}
-                                 className="w-full bg-white border border-slate-200 rounded-2xl px-5 py-3 text-sm focus:ring-4 focus:ring-rose-500/10 focus:border-rose-500 outline-none transition-all font-black text-slate-900"
-                               />
-                               <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-3 ml-1">{item.desc}</p>
-                             </div>
-                           ))}
                         </div>
                       </div>
 
