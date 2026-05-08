@@ -218,7 +218,7 @@ import { Coins } from 'lucide-react';
 
     const ADMIN_CREDENTIALS = {
       email: 'proxylysis@indiamart.com',
-      password: 'proxylysis@i123'
+      password: 'proxylysis@123'
     };
 
     const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -1902,7 +1902,7 @@ import { Coins } from 'lucide-react';
       <div className="min-h-screen bg-slate-50/50 text-slate-900 font-sans">
         {/* Sticky Top Bar */}
         <div className="sticky top-0 z-[60] bg-white/70 backdrop-blur-xl border-b border-slate-200/60 shadow-sm">
-          <div className="max-w-[1800px] mx-auto px-4 md:px-8 py-4 flex items-center justify-between">
+          <div className="max-w-full mx-auto px-4 md:px-12 py-4 flex items-center justify-between">
             <div className="flex items-center gap-5">
               <div className="bg-gradient-to-br from-indigo-600 to-violet-700 h-10 w-10 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200 transform rotate-3 hover:rotate-0 transition-transform duration-300">
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
@@ -2052,7 +2052,7 @@ import { Coins } from 'lucide-react';
           </div>
         </div>
 
-        <div className="max-w-[1800px] mx-auto p-4 md:p-6">
+        <div className="max-w-full mx-auto p-4 md:p-8">
           {error && (
             <div className="mb-4 bg-rose-50 border border-rose-200 text-rose-600 px-4 py-2.5 rounded-lg text-[10px] font-bold flex items-center gap-3">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
