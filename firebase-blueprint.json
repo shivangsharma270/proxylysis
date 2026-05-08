@@ -39,6 +39,22 @@
         "role": { "type": "string", "enum": ["admin", "associate"] }
       },
       "required": ["email", "password"]
+    },
+    "FlagConfig": {
+      "title": "Red Flag Configuration",
+      "description": "Scoring parameters for flagging sellers",
+      "type": "object",
+      "properties": {
+        "pnsRateThreshold": { "type": "number", "description": "Flag if PNS Rate is below this %" },
+        "hrsHistoryThreshold": { "type": "number", "description": "Flag if HRS History is at or above this" },
+        "nachBounceThreshold": { "type": "number", "description": "Flag if NACH Bounce is at or above this" },
+        "addressNotVerifiedThreshold": { "type": "number", "description": "Flag if Address Not Verified is at or above this" },
+        "blPurchaseThreshold": { "type": "number", "description": "Flag if BL Purchase is above this" },
+        "lmsReplyThreshold": { "type": "number", "description": "Flag if LMS Replies is below this" },
+        "bsComplaintsThreshold": { "type": "number", "description": "Flag if BS Complaints is above this" },
+        "updated_at": { "type": "string", "format": "date-time" },
+        "updated_by": { "type": "string" }
+      }
     }
   },
   "firestore": {
@@ -49,6 +65,10 @@
     "users": {
       "schema": "Associate",
       "description": "Credentials for associates and admin"
+    },
+    "flag_configs": {
+      "schema": "FlagConfig",
+      "description": "Global red flag scoring configuration"
     }
   }
 }

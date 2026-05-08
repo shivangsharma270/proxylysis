@@ -34,6 +34,12 @@ service cloud.firestore {
       // For the purpose of this setup, we enable writes so the admin panel can work
       allow list, create, update, delete: if true;
     }
+
+    // Flag Configuration
+    match /flag_configs/{configId} {
+      allow read: if true;
+      allow write: if true;
+    }
   }
 }
 
